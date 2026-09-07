@@ -1,7 +1,0 @@
-Genesis cartridge mesh source:
-Sega Genesis Workshop item 746777074 by Spicy_Apples / Unconid.
-https://steamcommunity.com/sharedfiles/filedetails/?id=746777074
-
-The Source Engine MDL/VVD/VTX asset was converted to OBJ for Cartrix using
-the MIT-licensed source-mdl converter:
-https://github.com/LordVonAdel/source-mdl
