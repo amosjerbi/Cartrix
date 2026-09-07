@@ -98,6 +98,3 @@ To add a platform:
 3. Add or scan artwork with Y.
 4. Deploy the updated `Cartrix Launcher/` directory and root
    `Cartrix Launcher.sh` to `/roms/ports/`.
-
-## Credits
-Used 3D models from https://www.patreon.com/SocketLauncher/posts/socket-0-3-2-166847366
