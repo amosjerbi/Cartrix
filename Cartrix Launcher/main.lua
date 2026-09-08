@@ -179,7 +179,7 @@ local function drawModel(item, slot, topMost)
     local scale = active and (selectedScale * modelZoom) or baseScale
     local alpha = 1
     meshShader:send("angle", angle)
-    meshShader:send("labelFacing", (item.labelPlatform == "mastersystem" or math.cos(angle) > 0) and 1 or 0)
+    meshShader:send("labelFacing", math.cos(angle) > 0 and 1 or 0)
     meshShader:send("offset", {offset, 0.20})
     meshShader:send("modelScale", scale)
     meshShader:send("labelPass", 0)
@@ -200,7 +200,7 @@ local function drawModel(item, slot, topMost)
     meshShader:send("topMost", topMost and 1 or 0)
     if topMost then love.graphics.setDepthMode("less", true) end
     love.graphics.draw(item.mesh.mesh)
-    if item.mesh.labelMesh and item.labelTextures then
+    if item.mesh.labelMesh and item.labelTextures and (item.labelPlatform ~= "mastersystem" or math.cos(angle) > 0) then
         item.mesh.labelMesh:setTexture(item.labelTextures[item.coverIndex or 1])
         meshShader:send("labelPass", 1)
         -- The label mesh shares depth with the opaque sticker surface. Allow
