@@ -51,7 +51,25 @@ for platform in $platforms; do
             done < "$out/.scan-files"
         done
     done
-    rm -f "$seen" "$out/.scan-files"
+    : > "$out/rom-index.txt"
+    rom_seen="$out/.rom-seen"
+    : > "$rom_seen"
+    for root in /roms /storage/roms /storage/games-internal/roms; do
+        source="$root/$platform"
+        [ -d "$source" ] || continue
+        find "$source" -type f \
+            ! -path '*/images/*' ! -path '*/videos/*' ! -path '*/manuals/*' ! -path '*/.focus-3d/*' \
+            ! -iname '*.srm' ! -iname '*.png' ! -iname '*.jpg' \
+            ! -iname '*.jpeg' ! -iname '*.webp' ! -iname '*.xml' \
+            ! -iname '*.txt' ! -iname '*.pdf' ! -iname '*.tmp' \
+            ! -name '._*' ! -name '.*' -print | sort | while IFS= read -r file; do
+                base=$(basename "$file")
+                grep -Fqx "$base" "$rom_seen" && continue
+                printf '%s\n' "$base" >> "$rom_seen"
+                printf '%s\n' "$file" >> "$out/rom-index.txt"
+            done
+    done
+    rm -f "$seen" "$out/.scan-files" "$rom_seen"
 done
 
 exit 0

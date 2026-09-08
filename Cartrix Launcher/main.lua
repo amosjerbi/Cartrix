@@ -33,6 +33,7 @@ local rotations = {}
 local visibleModels = {}
 local platformGroups = {}
 local selectedPlatform = 1
+local allCartridges = false
 local status = "LOADING LOCAL MESHES"
 local meshShader
 local scanBusy = false
@@ -161,9 +162,10 @@ end
 local function drawModel(item, slot, topMost)
     if not item.mesh or not meshShader then return end
     local active = item == visibleModels[selected]
-    local angle = (active and rotations[selected] or HERO_ANGLE) + (item.angleOffsetY or 0)
+    local angle = (active and (rotations[selected] or 0) or HERO_ANGLE) + (item.angleOffsetY or 0)
     local offset = slot * 2.05
-    local scale = active and (1.22 * modelZoom) or (1.0 - math.min(math.abs(slot), 3) * 0.12)
+    local selectedScale = 1.75
+    local scale = active and (selectedScale * modelZoom) or (1.0 - math.min(math.abs(slot), 3) * 0.12)
     local alpha = 1
     meshShader:send("angle", angle)
     meshShader:send("offset", {offset, 0.20})
@@ -237,6 +239,7 @@ local function loadLabelTextures(item)
 end
 
 local function showPlatform(index)
+    allCartridges = false
     if #platformGroups == 0 then
         visibleModels = {}
         selected, carouselPosition, targetPosition = 1, 0, 0
@@ -253,29 +256,74 @@ local function rebuildVisibleModels()
     platformGroups = {}
     local groupsByPlatform = {}
     for _, item in ipairs(models) do
-        if item.hasScrapedData and not groupsByPlatform[item.labelPlatform] then
+        if not groupsByPlatform[item.labelPlatform] then
             local group = {name = item.name, short = item.short, platform = item.labelPlatform, logo = item.logo, games = {}}
             groupsByPlatform[item.labelPlatform] = group
             platformGroups[#platformGroups + 1] = group
-            for gameIndex, imagePath in ipairs(item.labelVariants or {}) do
+            local indexedRoms = {}
+            local romIndex = love.filesystem.read("labels/" .. item.labelPlatform .. "/rom-index.txt")
+            if romIndex then
+                for romPath in romIndex:gmatch("[^\r\n]+") do
+                    indexedRoms[#indexedRoms + 1] = romPath
+                end
+            end
+            group.hasRoms = #indexedRoms > 0
+            local representedRoms = {}
+            local variants = item.hasScrapedData and (item.labelVariants or {}) or {}
+            for gameIndex, rawImagePath in ipairs(variants) do
+                local imagePath = rawImagePath or nil
                 local game = {}
                 for key, value in pairs(item) do game[key] = value end
-                local romPath = item.scrapeRomPaths and item.scrapeRomPaths[imagePath]
-                local title = romPath and romPath:match("([^/]+)$") or imagePath:match("([^/]+)$") or imagePath
+                local romPath = imagePath and item.scrapeRomPaths and item.scrapeRomPaths[imagePath]
+                local title = romPath and romPath:match("([^/]+)$") or (imagePath and imagePath:match("([^/]+)$")) or item.name
                 title = title:gsub("%.[^%.]+$", "")
                 game.platformName = item.name
                 game.name = title
                 game.gameIndex = gameIndex
-                game.labelVariants = {imagePath}
-                game.labelTextures = item.labelTextures and {item.labelTextures[gameIndex]} or nil
+                game.labelVariants = imagePath and {imagePath} or nil
+                game.labelTextures = imagePath and item.labelTextures and {item.labelTextures[gameIndex]} or nil
                 game.coverIndex = 1
                 game.scrapeRomPaths = {}
-                if romPath then game.scrapeRomPaths[imagePath] = romPath end
+                if imagePath and romPath then game.scrapeRomPaths[imagePath] = romPath end
+                game.romPath = romPath
+                if romPath then representedRoms[romPath] = true end
                 game.mesh = item.mesh
                 group.games[#group.games + 1] = game
             end
+            for _, romPath in ipairs(indexedRoms) do
+                if not representedRoms[romPath] then
+                    local game = {}
+                    for key, value in pairs(item) do game[key] = value end
+                    game.name = (romPath:match("([^/]+)$") or romPath):gsub("%.[^%.]+$", "")
+                    game.platformName = item.name
+                    game.labelVariants = nil
+                    game.labelTextures = nil
+                    game.scrapeRomPaths = nil
+                    game.romPath = romPath
+                    game.gameIndex = #group.games + 1
+                    game.mesh = item.mesh
+                    group.games[#group.games + 1] = game
+                end
+            end
+            if #group.games == 0 then
+                local game = {}
+                for key, value in pairs(item) do game[key] = value end
+                game.name = item.name
+                game.platformName = item.name
+                game.labelVariants = nil
+                game.labelTextures = nil
+                game.scrapeRomPaths = nil
+                game.mesh = item.mesh
+                game.gameIndex = 1
+                group.games[1] = game
+            end
         end
     end
+    local groupsWithRoms = {}
+    for _, group in ipairs(platformGroups) do
+        if group.hasRoms then groupsWithRoms[#groupsWithRoms + 1] = group end
+    end
+    platformGroups = groupsWithRoms
     if #platformGroups > 0 then
         showPlatform(selectedPlatform)
     else
@@ -287,6 +335,28 @@ end
 local function selectPlatform(delta)
     if #platformGroups == 0 then return end
     showPlatform(selectedPlatform + delta)
+end
+
+local function showAllCartridges()
+    allCartridges = true
+    local allGames = {}
+    for _, group in ipairs(platformGroups) do
+        for _, game in ipairs(group.games) do
+            allGames[#allGames + 1] = game
+        end
+    end
+    visibleModels = allGames
+    selected = wrap(selected, math.max(#visibleModels, 1))
+    carouselPosition = selected - 1
+    targetPosition = carouselPosition
+end
+
+local function toggleAllCartridges()
+    if allCartridges then
+        showPlatform(selectedPlatform)
+    else
+        showAllCartridges()
+    end
 end
 
 local function refreshScannedLabels()
@@ -338,9 +408,12 @@ end
 
 local function launchSelectedRom()
     local item = visibleModels[selected]
-    if not item or not item.labelVariants or not item.scrapeRomPaths then return end
-    local imagePath = item.labelVariants[item.coverIndex or 1]
-    local romPath = item.scrapeRomPaths[imagePath]
+    if not item then return end
+    local romPath = item.romPath
+    if not romPath and item.labelVariants and item.scrapeRomPaths then
+        local imagePath = item.labelVariants[item.coverIndex or 1]
+        romPath = item.scrapeRomPaths[imagePath]
+    end
     if not romPath or romPath == "" then
         status = "ROM PATH NOT FOUND"
         return
@@ -359,8 +432,11 @@ end
 
 local function selectedRomName()
     local item = visibleModels[selected]
-    if not item or not item.labelVariants or not item.scrapeRomPaths then return "NO ROM SELECTED" end
-    local romPath = item.scrapeRomPaths[item.labelVariants[item.coverIndex or 1]]
+    if not item then return "NO ROM SELECTED" end
+    local romPath = item.romPath
+    if not romPath and item.labelVariants and item.scrapeRomPaths then
+        romPath = item.scrapeRomPaths[item.labelVariants[item.coverIndex or 1]]
+    end
     if not romPath or romPath == "" then return "NO ROM SELECTED" end
     local name = romPath:match("([^/]+)$") or romPath
     return name:gsub("%.[^%.]+$", "")
@@ -500,6 +576,7 @@ function love.update(dt)
     -- Every model owns its own turntable angle. Selecting another model
     -- switches control to that model without losing the previous angle.
     if #visibleModels > 0 then
+        rotations[selected] = rotations[selected] or 0
         rotations[selected] = (rotations[selected] + dt * (SPIN_SPEED + analogTurn * 2.8)) % TAU
     end
 end
@@ -509,7 +586,8 @@ function love.keypressed(key)
     elseif key == "right" or key == "d" then select(1)
     elseif key == "r" then selectPlatform(1)
     elseif key == "l" then selectPlatform(-1)
-    elseif key == "s" or key == "y" then scanScrapedData()
+    elseif key == "s" then scanScrapedData()
+    elseif key == "y" then toggleAllCartridges()
     elseif key == "x" and not zoomKeyHeld and not zoomPadHeld and zoomToggleCooldown <= 0 then
         zoomKeyHeld = true
         zoomToggleCooldown = 0.75
@@ -523,8 +601,10 @@ function love.gamepadpressed(_, button)
     elseif button == "dpright" then select(1)
     elseif button == "leftshoulder" then selectPlatform(-1)
     elseif button == "rightshoulder" then selectPlatform(1)
-    elseif button == "y" then scanScrapedData()
+    elseif button == "y" then toggleAllCartridges()
     elseif button == "a" then launchSelectedRom()
+    elseif button == "b" then
+        if allCartridges then showPlatform(selectedPlatform) else love.event.quit() end
     elseif button == "x" and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
         zoomPadHeld = true
         zoomToggleCooldown = 0.75
@@ -622,7 +702,7 @@ function love.draw()
         end
     end
     if selectedSlot and #visibleModels > 0 then
-        drawModel(visibleModels[selected], selectedSlot, zoomed)
+        drawModel(visibleModels[selected], selectedSlot, true)
     end
     love.graphics.setShader()
     love.graphics.setMeshCullMode("none")
@@ -630,10 +710,10 @@ function love.draw()
     love.graphics.setBlendMode("alpha")
     love.graphics.setFont(font)
     local group = platformGroups[selectedPlatform]
-    if group then
+    if group or allCartridges then
         love.graphics.setFont(platformFont)
         love.graphics.setColor(0.96, 0.97, 1, 1)
-        local platformName = group.name or group.platform or "PLATFORM"
+        local platformName = allCartridges and "All Cartridges" or (group.name or group.platform or "PLATFORM")
         platformName = platformName:gsub("%s+Cartridge$", "")
         -- Slight horizontal overdraw gives the platform heading a bold look
         -- without requiring a separate font asset on the device.
