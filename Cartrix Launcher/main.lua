@@ -204,7 +204,7 @@ local function drawModel(item, slot, topMost)
         -- The label mesh shares depth with the opaque sticker surface. Allow
         -- equal-depth fragments so the artwork pass can replace the backing
         -- color without writing a second depth layer.
-        if topMost then
+        if topMost or item.labelPlatform == "nes" then
             love.graphics.setDepthMode("always", false)
         else
             love.graphics.setDepthMode("lequal", false)
