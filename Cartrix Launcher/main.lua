@@ -8,7 +8,7 @@ local TAU = math.pi * 2
 local MAX_TRIANGLES = 30000
 local HERO_ANGLE = -0.46
 local SPIN_SPEED = 0
-local SLIDE_TIME = 0.26
+local SLIDE_TIME = 0.36
 
 local models = {
     { name = "Game Boy", short = "GB", file = "models/gb.obj", labelPlatform = "gb", labelVariants = {"labels/gb/scan-01.png", "labels/gb/scan-02.png"}, labelFlipY = true, angleOffsetY = 0, color = {0.7608, 0.6980, 0.5020} }, -- #C2B280
@@ -16,7 +16,7 @@ local models = {
     { name = "NES Cartridge", short = "NES", file = "models/nes.obj", labelPlatform = "nes", labelAxisU = 2, labelAxisV = 3, labelScale = 0.82, color = {0.50, 0.48, 0.70} },
     { name = "SNES Cartridge", short = "SNES", file = "models/snes.obj", labelPlatform = "snes", labelVariants = {"labels/snes/scan-01.png"}, labelFlipY = true, color = {0.50, 0.48, 0.70} },
     { name = "Nintendo 64", short = "N64", file = "models/N64.obj", labelPlatform = "n64", labelVariants = {"labels/n64/01.png"}, labelFlipY = true, color = {0.7608, 0.6980, 0.5020} }, -- #C2B280
-    { name = "Game Boy Advance", short = "GBA", file = "models/gba.obj", labelPlatform = "gba", labelVariants = {"labels/gba/01.png", "labels/gba/02.png", "labels/gba/03.png"}, labelFlipY = false, labelMirrorX = true, labelCropY = 1.0, labelScale = 0.50, labelRotate180 = false, angleOffsetY = 0, rotateZ180 = false, color = {0.62, 0.64, 0.68} },
+    { name = "Game Boy Advance", short = "GBA", file = "models/gba.obj", labelPlatform = "gba", labelVariants = {"labels/gba/01.png", "labels/gba/02.png", "labels/gba/03.png"}, labelFlipY = false, labelMirrorX = true, labelCropY = 1.0, labelScale = 1.50, labelRotate180 = false, angleOffsetY = 0, rotateZ180 = false, color = {0.62, 0.64, 0.68} },
     { name = "Game Gear", short = "GG", file = "models/gamegear.obj", labelPlatform = "gamegear", labelVariants = {"labels/gamegear/scan-01.png"}, labelFlipY = true, labelMirrorX = false, labelRotate180 = false, rotateXZ = false, rotateZ180 = false, angleOffsetY = 0, noDecimate = true, color = {0.20, 0.22, 0.25} }, -- same as Genesis
     { name = "Genesis", short = "GEN", file = "models/genesis.obj", labelPlatform = "genesis", labelVariants = {"labels/genesis/scan-01.png"}, labelMirrorX = true, labelRotate180 = true, color = {0.20, 0.22, 0.25} },
     { name = "Nintendo DS", short = "NDS", file = "models/nds.obj", labelPlatform = "nds", labelVariants = {"labels/nds/scan-01.png"}, labelFlipY = true, color = {0.62, 0.64, 0.68} },
@@ -34,6 +34,7 @@ local visibleModels = {}
 local platformGroups = {}
 local selectedPlatform = 1
 local allCartridges = false
+local selectedAngleBlend = 1
 local status = "LOADING LOCAL MESHES"
 local meshShader
 local scanBusy = false
@@ -162,14 +163,21 @@ end
 local function drawModel(item, slot, topMost)
     if not item.mesh or not meshShader then return end
     local active = item == visibleModels[selected]
-    local angle = (active and (rotations[selected] or 0) or HERO_ANGLE) + (item.angleOffsetY or 0)
-    local offset = slot * 2.05
+    local angleBlend = active and selectedAngleBlend or 0
+    local angle = HERO_ANGLE + ((rotations[selected] or 0) - HERO_ANGLE) * angleBlend + (item.angleOffsetY or 0)
+    -- Add a gap on each side of the selected cartridge only. The constant
+    -- offset keeps spacing between the unselected cartridges unchanged.
+    local selectedGap = slot > 0 and 0.65 or (slot < 0 and -0.65 or 0)
+    local offset = slot * 2.05 + selectedGap
     local selectedScale = item.labelPlatform == "snes" and 3.20
         or item.labelPlatform == "genesis" and 3.20
+        or item.labelPlatform == "gamegear" and 2.20
         or 1.75
-    local scale = active and (selectedScale * modelZoom) or (1.0 - math.min(math.abs(slot), 3) * 0.12)
+    local baseScale = 1.0 - math.min(math.abs(slot), 3) * 0.12
+    local scale = active and (selectedScale * modelZoom) or baseScale
     local alpha = 1
     meshShader:send("angle", angle)
+    meshShader:send("labelFacing", math.cos(angle) > 0 and 1 or 0)
     meshShader:send("offset", {offset, 0.20})
     meshShader:send("modelScale", scale)
     meshShader:send("labelPass", 0)
@@ -194,7 +202,11 @@ local function drawModel(item, slot, topMost)
         -- The label mesh shares depth with the opaque sticker surface. Allow
         -- equal-depth fragments so the artwork pass can replace the backing
         -- color without writing a second depth layer.
-        love.graphics.setDepthMode("lequal", false)
+        if topMost then
+            love.graphics.setDepthMode("always", false)
+        else
+            love.graphics.setDepthMode("lequal", false)
+        end
         love.graphics.setMeshCullMode("none")
         love.graphics.draw(item.mesh.labelMesh)
         love.graphics.setDepthMode("less", true)
@@ -207,6 +219,7 @@ local function select(delta)
     if #visibleModels == 0 then return end
     selected = wrap(selected + delta, #visibleModels)
     targetPosition = targetPosition + delta
+    selectedAngleBlend = 0
 end
 
 local function toggleZoom()
@@ -250,6 +263,7 @@ local function showPlatform(index)
     selectedPlatform = wrap(index, #platformGroups)
     visibleModels = platformGroups[selectedPlatform].games
     selected = wrap(selected, math.max(#visibleModels, 1))
+    selectedAngleBlend = 0
     carouselPosition = selected - 1
     targetPosition = carouselPosition
 end
@@ -518,6 +532,7 @@ function love.load()
         extern number labelRotateLeft;
         extern number labelRotate180;
         extern number labelPass;
+        extern number labelFacing;
 
         vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
             vec3 N = normalize(vNormal);
@@ -537,10 +552,13 @@ function love.load()
             // on the label's actual vertical axis rather than the source axis.
             labelUV.y = (labelUV.y - 0.5) * labelCropY + 0.5;
             vec3 material = baseColor;
-            if (labelPass > 0.5 && vLabel > 0.5) {
+            // Only apply artwork when the label face points toward the camera.
+            // From the rear, show the cartridge body instead of the label back.
+            if (labelPass > 0.5 && vLabel > 0.5 && labelFacing > 0.5) {
                 vec2 fittedUV = (labelUV - vec2(0.5)) / max(labelScale, 0.001) + vec2(0.5);
                 if (fittedUV.x >= 0.0 && fittedUV.x <= 1.0 && fittedUV.y >= 0.0 && fittedUV.y <= 1.0) {
                     material = Texel(tex, fittedUV).rgb;
+                    return vec4(material, 1.0);
                 }
             }
             return vec4(material * (ambient + diffuse * 0.75) + vec3(specular), 1.0);
@@ -566,6 +584,7 @@ function love.update(dt)
         zoomToggleCooldown = math.max(0, zoomToggleCooldown - dt)
     end
     carouselPosition = lerp(carouselPosition, targetPosition, 1 - math.exp(-dt / SLIDE_TIME))
+    selectedAngleBlend = lerp(selectedAngleBlend, 1, 1 - math.exp(-dt / 0.24))
     modelZoom = lerp(modelZoom, targetZoom, 1 - math.exp(-dt / 0.18))
     for _, joystick in ipairs(love.joystick.getJoysticks()) do
         local value = joystick:getGamepadAxis("leftx")
@@ -704,7 +723,7 @@ function love.draw()
         end
     end
     if selectedSlot and #visibleModels > 0 then
-        drawModel(visibleModels[selected], selectedSlot, true)
+        drawModel(visibleModels[selected], 0, true)
     end
     love.graphics.setShader()
     love.graphics.setMeshCullMode("none")
