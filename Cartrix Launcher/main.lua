@@ -164,7 +164,9 @@ local function drawModel(item, slot, topMost)
     local active = item == visibleModels[selected]
     local angle = (active and (rotations[selected] or 0) or HERO_ANGLE) + (item.angleOffsetY or 0)
     local offset = slot * 2.05
-    local selectedScale = 1.75
+    local selectedScale = item.labelPlatform == "snes" and 3.20
+        or item.labelPlatform == "genesis" and 3.20
+        or 1.75
     local scale = active and (selectedScale * modelZoom) or (1.0 - math.min(math.abs(slot), 3) * 0.12)
     local alpha = 1
     meshShader:send("angle", angle)
@@ -602,8 +604,8 @@ function love.gamepadpressed(_, button)
     elseif button == "leftshoulder" then selectPlatform(-1)
     elseif button == "rightshoulder" then selectPlatform(1)
     elseif button == "y" then toggleAllCartridges()
-    elseif button == "a" then launchSelectedRom()
-    elseif button == "b" then
+    elseif button == "b" then launchSelectedRom()
+    elseif button == "a" then
         if allCartridges then showPlatform(selectedPlatform) else love.event.quit() end
     elseif button == "x" and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
         zoomPadHeld = true
