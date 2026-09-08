@@ -13,7 +13,7 @@ local SLIDE_TIME = 0.36
 local models = {
     { name = "Game Boy", short = "GB", file = "models/gb.obj", labelPlatform = "gb", labelVariants = {"labels/gb/scan-01.png", "labels/gb/scan-02.png"}, labelFlipY = true, angleOffsetY = 0, color = {0.7608, 0.6980, 0.5020} }, -- #C2B280
     { name = "Game Boy Color", short = "GBC", file = "models/gbc.obj", labelPlatform = "gbc", labelVariants = {"labels/gbc/scan-01.png"}, labelFlipY = true, color = {0.62, 0.64, 0.68} },
-    { name = "NES Cartridge", short = "NES", file = "models/nes.obj", labelPlatform = "nes", labelAxisU = 2, labelAxisV = 3, labelScale = 0.82, color = {0.50, 0.48, 0.70} },
+    { name = "NES Cartridge", short = "NES", file = "models/nes.obj", labelPlatform = "nes", labelAxisU = 2, labelAxisV = 3, labelScale = 0.3, labelRotate = true, labelRotate180 = true, labelMirrorX = true, labelOffsetX = 0.44, labelOffsetY = -0.10, color = {0.50, 0.48, 0.70} },
     { name = "SNES Cartridge", short = "SNES", file = "models/snes.obj", labelPlatform = "snes", labelVariants = {"labels/snes/scan-01.png"}, labelFlipY = true, color = {0.50, 0.48, 0.70} },
     { name = "Nintendo 64", short = "N64", file = "models/N64.obj", labelPlatform = "n64", labelVariants = {"labels/n64/01.png"}, labelFlipY = true, color = {0.7608, 0.6980, 0.5020} }, -- #C2B280
     { name = "Game Boy Advance", short = "GBA", file = "models/gba.obj", labelPlatform = "gba", labelVariants = {"labels/gba/01.png", "labels/gba/02.png", "labels/gba/03.png"}, labelFlipY = false, labelMirrorX = true, labelCropY = 1.0, labelScale = 1.50, labelRotate180 = false, angleOffsetY = 0, rotateZ180 = false, color = {0.62, 0.64, 0.68} },
@@ -190,6 +190,8 @@ local function drawModel(item, slot, topMost)
     meshShader:send("labelRotate", item.labelRotate and 1 or 0)
     meshShader:send("labelRotateLeft", item.labelRotateLeft and 1 or 0)
     meshShader:send("labelRotate180", item.labelRotate180 and 1 or 0)
+    meshShader:send("labelOffsetX", item.labelOffsetX or 0)
+    meshShader:send("labelOffsetY", item.labelOffsetY or 0)
     meshShader:send("rotateXY", item.rotateXY and 1 or 0)
     meshShader:send("rotateXZ", item.rotateXZ and 1 or 0)
     meshShader:send("rotateZ180", item.rotateZ180 and 1 or 0)
@@ -531,6 +533,8 @@ function love.load()
         extern number labelRotate;
         extern number labelRotateLeft;
         extern number labelRotate180;
+        extern number labelOffsetX;
+        extern number labelOffsetY;
         extern number labelPass;
         extern number labelFacing;
 
@@ -556,6 +560,8 @@ function love.load()
             // From the rear, show the cartridge body instead of the label back.
             if (labelPass > 0.5 && vLabel > 0.5 && labelFacing > 0.5) {
                 vec2 fittedUV = (labelUV - vec2(0.5)) / max(labelScale, 0.001) + vec2(0.5);
+                fittedUV.x += labelOffsetX;
+                fittedUV.y += labelOffsetY;
                 if (fittedUV.x >= 0.0 && fittedUV.x <= 1.0 && fittedUV.y >= 0.0 && fittedUV.y <= 1.0) {
                     material = Texel(tex, fittedUV).rgb;
                     return vec4(material, 1.0);
