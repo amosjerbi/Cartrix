@@ -181,7 +181,7 @@ local function drawModel(item, slot, topMost)
     local alpha = 1
     meshShader:send("angle", angle)
     meshShader:send("labelFacing", math.cos(angle) > 0 and 1 or 0)
-    meshShader:send("labelFrontOnly", item.labelPlatform == "neogeo" and 1 or 0)
+    meshShader:send("labelFrontOnly", item.labelPlatform == "nes" and 0 or 1)
     meshShader:send("offset", {offset, 0.20})
     meshShader:send("modelScale", scale)
     meshShader:send("labelPass", 0)
