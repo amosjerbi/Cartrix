@@ -181,6 +181,7 @@ local function drawModel(item, slot, topMost)
     local alpha = 1
     meshShader:send("angle", angle)
     meshShader:send("labelFacing", math.cos(angle) > 0 and 1 or 0)
+    meshShader:send("labelFrontOnly", item.labelPlatform == "neogeo" and 1 or 0)
     meshShader:send("offset", {offset, 0.20})
     meshShader:send("modelScale", scale)
     meshShader:send("labelPass", 0)
@@ -540,6 +541,7 @@ function love.load()
         extern number labelOffsetY;
         extern number labelPass;
         extern number labelFacing;
+        extern number labelFrontOnly;
 
         vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen) {
             vec3 N = normalize(vNormal);
@@ -559,9 +561,10 @@ function love.load()
             // on the label's actual vertical axis rather than the source axis.
             labelUV.y = (labelUV.y - 0.5) * labelCropY + 0.5;
             vec3 material = baseColor;
+            if (labelPass > 0.5 && labelFrontOnly > 0.5 && dot(N, V) <= 0.05) discard;
             // Only apply artwork when the label face points toward the camera.
             // From the rear, show the cartridge body instead of the label back.
-            if (labelPass > 0.5 && vLabel > 0.5 && labelFacing > 0.5) {
+            if (labelPass > 0.5 && vLabel > 0.5 && labelFacing > 0.5 && (labelFrontOnly < 0.5 || dot(N, V) > 0.05)) {
                 vec2 fittedUV = (labelUV - vec2(0.5)) / max(labelScale, 0.001) + vec2(0.5);
                 fittedUV.x += labelOffsetX;
                 fittedUV.y += labelOffsetY;
