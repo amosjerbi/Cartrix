@@ -20,6 +20,7 @@ local models = {
     { name = "Game Gear", short = "GG", file = "models/gamegear.obj", labelPlatform = "gamegear", labelVariants = {"labels/gamegear/scan-01.png"}, labelFlipY = true, labelMirrorX = false, labelRotate180 = false, rotateXZ = false, rotateZ180 = false, angleOffsetY = 0, noDecimate = true, color = {0.20, 0.22, 0.25} }, -- same as Genesis
     { name = "Genesis", short = "GEN", file = "models/genesis.obj", labelPlatform = "genesis", labelVariants = {"labels/genesis/scan-01.png"}, labelMirrorX = true, labelRotate180 = true, color = {0.20, 0.22, 0.25} },
     { name = "Master System", short = "SMS", file = "models/mastersystem.obj", labelPlatform = "mastersystem", labelVariants = {"labels/mastersystem/scan-01.png", "labels/mastersystem/scan-02.png", "labels/mastersystem/scan-03.png"}, labelFlipY = false, labelScale = 0.25, labelOffsetY = -1.5, color = {0.20, 0.22, 0.25} },
+    { name = "Neo Geo", short = "NEO GEO", file = "models/neogeo.obj", labelPlatform = "neogeo", labelVariants = {"labels/neogeo/scan-01.png"}, labelFlipY = false, labelMirrorX = true, labelRotate = true, labelRotate180 = true, labelScale = 0.25, labelOffsetX = 1.5, color = {0.10, 0.12, 0.20} },
     { name = "Nintendo DS", short = "NDS", file = "models/nds.obj", labelPlatform = "nds", labelVariants = {"labels/nds/scan-01.png"}, labelFlipY = true, color = {0.62, 0.64, 0.68} },
     { name = "Switch Cartridge", short = "SWITCH", file = "models/switch.obj", labelPlatform = "switch", color = {0.78, 0.26, 0.30} },
     { name = "PlayStation Vita", short = "VITA", file = "models/vita.obj", labelPlatform = "vita", color = {0.32, 0.36, 0.58} },
@@ -173,7 +174,7 @@ local function drawModel(item, slot, topMost)
     local selectedScale = item.labelPlatform == "snes" and 3.20
         or item.labelPlatform == "genesis" and 3.20
         or item.labelPlatform == "gamegear" and 2.20
-        or item.labelPlatform == "mastersystem" and 3.50
+        or item.labelPlatform == "mastersystem" and 3.20
         or 2.20
     local baseScale = 1.0 - math.min(math.abs(slot), 3) * 0.12
     local scale = active and (selectedScale * modelZoom) or baseScale
@@ -441,7 +442,7 @@ local function launchSelectedRom()
     local cores = {
         gb = "gambatte", gbc = "gambatte", nes = "nestopia", snes = "snes9x",
         n64 = "mupen64plus_next", gba = "mgba", nds = "melonds",
-    gamegear = "genesis_plus_gx", genesis = "genesis_plus_gx", mastersystem = "genesis_plus_gx",
+    gamegear = "genesis_plus_gx", genesis = "genesis_plus_gx", mastersystem = "genesis_plus_gx", neogeo = "fbneo",
         psp = "ppsspp", psx = "pcsx_rearmed32", ["3ds"] = "azahar",
     }
     local command = string.format("/usr/bin/runemu.sh %q -P%s --core=%s --emulator=retroarch >/tmp/rocknix-carousel-launch.log 2>&1 & nohup sh '/roms/ports/Cartrix Launcher/fullscreen-retroarch.sh' >/tmp/rocknix-retroarch-fullscreen.log 2>&1 </dev/null &", romPath, item.labelPlatform, cores[item.labelPlatform] or "")
