@@ -140,6 +140,23 @@ while [ "$attempt" -le 2 ]; do
     love_status=$?
     echo "LÖVE exit status: $love_status" >>"$CAROUSEL_LOG"
 
+    # Keep the port's process scope alive for the complete game session.
+    # Exiting this wrapper immediately lets ROCKNIX tear down runemu/RetroArch
+    # a few seconds after Cartrix closes, which looks like a frozen frontend.
+    if grep -q '^Exit: game launch ' "$CAROUSEL_LOG"; then
+        game_is_running() {
+            pgrep -x retroarch >/dev/null 2>&1 || \
+            pgrep -x drastic.bin >/dev/null 2>&1 || \
+            pgrep -af '^/bin/bash /usr/bin/runemu.sh ' 2>/dev/null | \
+                grep -v '/storage/roms/ports/Cartrix.sh' | grep -q .
+        }
+        while game_is_running; do
+            sleep 0.5
+        done
+        restore_frontend
+        exit "$love_status"
+    fi
+
     # The Mali driver can occasionally reject the first context immediately
     # after a previous Cartrix window closes. Retry only a failed startup; once
     # the library became ready, an exit belongs to the user and must stay final.

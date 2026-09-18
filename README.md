@@ -1,19 +1,18 @@
 # Cartrix
 
-Cartrix is a LÖVE-based 3D cartridge carousel for ROCKNIX. On the Anbernic RG DS it uses one borderless 1280×480 window spanning both 640×480 displays. Cartrix is currently a library browser; it does not launch games.
+Cartrix is a LÖVE 3D game carousel for ROCKNIX. On the Anbernic RG DS it spans both 640×480 displays with one borderless 1280×480 window. Select a game to see its cartridge or disc, artwork, screenshot, and play metadata, then press A to launch it.
 
-## Display layout
+## Current release
 
-- Upper display: centered 3D cartridge carousel, selected-game title, platform logo, and L/R platform hints.
-- Lower display, left: `MAIN STORY` and `PLAYED TIME` values read from the ROM platform's `gamelist.xml`.
-- Lower display, right: selected-game screenshot, falling back to its cover when no screenshot is available.
-- Lower display, bottom: Start/Exit, X/Zoom, and Y/Scan instructions.
+- The upper display shows a 3D model and game title. The lower display shows `MAIN STORY`, `PLAYED TIME`, and a screenshot. Both displays share the pale blue dotted background.
+- Scraped cover art appears on the model's sticker layer. Games without scraped art receive a generated platform label. The model shells have subtle material texture, and embedded OBJ material colors are rendered where available.
+- Dreamcast and Saturn use the same disc mesh with separate ROM libraries and artwork. Their printed front labels sit on a circular sticker layer. The back is smooth silver with a soft, shifting reflection.
+- Pressing A on a Dreamcast or Saturn game spins the disc one full turn before it drops through the lower edge and launches. Other models retain the cartridge flip and insertion animation.
+- The carousel can launch indexed games through ROCKNIX. The launcher keeps its process scope alive during gameplay and restores EmulationStation when Cartrix exits.
 
-`Cartrix.sh` powers both panels, waits for the LÖVE window, and reapplies its floating 1280×480 placement after ROCKNIX finishes its own launch-time display changes. On exit it restores EmulationStation fullscreen on the upper panel and powers off the lower panel.
+## Install on the RG DS
 
-## Folder layout
-
-Install the launcher under:
+Unpack `Cartrix-rgds-launch.zip` into `/roms/ports/`. The archive contains:
 
 ```text
 /roms/ports/
@@ -22,90 +21,79 @@ Install the launcher under:
 └── Cartrix/
     ├── conf.lua
     ├── main.lua
+    ├── scan-scrapes.sh
+    ├── fullscreen-drastic.sh
+    ├── fullscreen-retroarch.sh
     ├── models/
-    ├── labels/
-    ├── screenshots/
-    └── logos/
+    ├── logos/
+    └── textures/
 ```
 
-Make both launch scripts executable:
+Make the launcher and helper scripts executable if your unzip tool did not preserve permissions:
 
 ```sh
-chmod +x "/roms/ports/Cartrix.sh"
-chmod +x "/roms/ports/enable_dual_screen_rgds.sh"
+chmod +x /roms/ports/Cartrix.sh /roms/ports/enable_dual_screen_rgds.sh
+chmod +x /roms/ports/Cartrix/*.sh
 ```
 
-`enable_dual_screen_rgds.sh` installs the persistent RG DS display configuration. Its Cartrix mode can also configure the panels without restarting Sway. The launcher invokes that mode automatically, so the helper does not need to be run separately before each Cartrix session.
+Launch **Cartrix** from EmulationStation's Ports menu. Its `gamelist.xml` entry should point to `./Cartrix.sh`. The launcher configures both screens, places the LÖVE window across them, and restores the normal frontend layout on exit. It tolerates display setup races after boot and retries one transient LÖVE startup failure.
 
-The resulting Sway configuration includes a rule equivalent to:
+### Requirements
 
-```text
-for_window [title="ROCKNIX 3D Carousel"] floating enable, fullscreen disable, border none, resize set width 1280 height 480, move absolute position 0 0, focus
-```
+- ROCKNIX with a working Sway/Wayland session.
+- LÖVE 11.x. `Cartrix.sh` searches common ROCKNIX and PortMaster locations, including `/storage/roms/ports/PortMaster/runtimes/love_11.5/love.aarch64`.
+- ROMs in ROCKNIX's platform folders. Emulator cores and any required BIOS files must already be configured for the games you want to launch.
 
-The launch path tolerates Sway startup races after a reboot and retries one transient LÖVE/Mali initialization failure before the library becomes ready.
+## ROMs and artwork
 
-## Runtime requirements
+On the first launch, Cartrix scans the ROM library. Press **Y** after adding games or scraping new images. You can also run `/roms/ports/Cartrix/scan-scrapes.sh` directly.
 
-- ROCKNIX on the target device.
-- LÖVE 11.x, normally the PortMaster runtime at:
+The scan writes data under `Cartrix/labels/<platform>/` and `Cartrix/screenshots/<platform>/`:
 
-  ```text
-  /storage/roms/ports/PortMaster/runtimes/love_11.5/love.aarch64
-  ```
+- `rom-index.txt` lists ROM paths.
+- `scan-XX.png` contains scraped cover art for model labels. The scanner keeps up to 24 images per platform.
+- `screen-XX.png` contains scraped screenshots for the lower display.
 
-- A working Sway/Wayland session.
+The scanner looks in the platform's `images` directory for ROCKNIX `-thumb.png`, `-image.png`, and `-marquee.png` artwork. If a game has no cover image, Cartrix shows a platform label on its model. If it has no screenshot, the lower display uses its cover or fallback label.
 
-`Cartrix.sh` searches common ROCKNIX and PortMaster LÖVE locations automatically.
-
-## Artwork
-
-Press Y inside Cartrix after adding ROMs or scraping new artwork. To run the same scan manually:
-
-```sh
-"/roms/ports/Cartrix/scan-scrapes.sh"
-```
-
-Artwork is separated by purpose:
-
-- `labels/<platform>/scan-XX.png`: cover art used on the 3D cartridge.
-- `screenshots/<platform>/screen-XX.png`: scraped screenshots used only on the lower display.
-- `logos/png/<platform>.png`: proportionally fitted platform logos shown above the upper carousel.
-
-Screenshots are read from ROCKNIX `*-image.png` artwork. When no screenshot exists, the lower display falls back to the selected cartridge cover.
+Dreamcast ROMs belong in `roms/dreamcast`; Saturn ROMs belong in `roms/saturn`. Their platform groups appear when the scan finds ROMs. The configured libretro cores are Flycast for Dreamcast and YabaSanshiro for Saturn.
 
 ## Controls
 
-- Left / Right or D-pad Left / Right: select a game.
-- L / R shoulder buttons: change platform.
-- X: toggle cartridge zoom.
-- Y: rescan ROMs and scraped artwork, then refresh the carousel.
-- Start or Escape: exit.
+| Control | Action |
+| --- | --- |
+| D-pad Left / Right | Select a game |
+| L / R | Change platform |
+| A | Launch the selected game |
+| B or Start | Exit Cartrix |
+| X | Toggle model zoom |
+| Y | Rescan ROMs and artwork |
+| Left stick | Rotate the selected model |
 
-Launch-time Start events are ignored briefly so the button press used in EmulationStation cannot immediately close Cartrix.
+Keyboard controls include Left/Right, L/R, Enter/Space to launch, Escape/Backspace to exit, X to zoom, and Y or S to rescan. Cartrix ignores the initial launch button press briefly so it does not immediately exit when opened from EmulationStation.
 
-## Supported platforms
+## Models and display
 
-The carousel defines cartridge/disc presentations for:
+The package includes OBJ meshes for Game Boy, Game Boy Color, NES, SNES, Nintendo 64, Game Boy Advance, Game Gear, Genesis, Nintendo DS, Switch, Neo Geo, and the shared Dreamcast/Saturn disc. Additional platform entries in `main.lua` require their corresponding optional OBJ files.
 
-Game Boy, Game Boy Color, NES, SNES, PAL SNES, Nintendo 64, Game Boy Advance, Game Gear, Sega Genesis, Nintendo DS, Nintendo Switch, PlayStation Vita, PSP/UMD, PlayStation, Nintendo 3DS, and Neo Geo.
+The upper screen contains the carousel, platform logo, and selected-game title. The lower screen contains metadata and a screenshot. The dotted background is cached as a canvas, so drawing it on both displays does not rebuild every dot each frame.
 
-Game Boy cartridges use the same gray body color as Game Boy Color cartridges. Titles containing `Zelda` retain the gold cartridge treatment. Zoom is capped consistently across platforms to keep large models inside the display.
+Game Boy cartridges use the same gray body color as Game Boy Color cartridges; titles containing `Zelda` use the gold treatment. Zoom is capped to keep large models inside the display.
 
-## Launching
+## Troubleshooting
 
-From EmulationStation, open Ports and launch `Cartrix`. The `gamelist.xml` entry should point to `./Cartrix.sh`. No separate wake script, emulator wrapper, or display-activation step is required.
-
-For troubleshooting, inspect:
+Check these device logs when a scan, launch, or display handoff fails:
 
 ```text
 /tmp/rocknix-3d-carousel/carousel.log
 /tmp/rocknix-carousel-scan.log
+/tmp/rocknix-carousel-launch.log
 /var/log/es_launch_stdout.log
 /var/log/es_launch_stderr.log
 ```
 
-The carousel log records launch attempts, startup timing, exit reason, and LÖVE's exit status. `Cartrix.sh` automatically removes an older matching Cartrix process before starting a new session, preventing overlapping windows after an interrupted launch.
+The carousel log records startup timing, exit reason, and LÖVE's exit status. `Cartrix.sh` closes an older matching Cartrix process before starting a new session so overlapping windows do not persist after an interrupted launch.
 
 ## Credits
-For all the 3D models - https://www.thingiverse.com/
+
+The 3D models were sourced from [Thingiverse](https://www.thingiverse.com/).

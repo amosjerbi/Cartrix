@@ -12,6 +12,8 @@ local MAX_TRIANGLES = 30000
 local HERO_ANGLE = -0.30
 local SPIN_SPEED = 0
 local SLIDE_TIME = 0.36
+local LAUNCH_ANIMATION_TIME = 0.82
+local DISC_LAUNCH_ANIMATION_TIME = 1.35
 local MAX_MODEL_ZOOM = 1.35
 
 -- Interface palette
@@ -42,13 +44,15 @@ local models = {
     { name = "Game Gear", short = "GG", file = "models/gamegear.obj", labelPlatform = "gamegear", labelVariants = {"labels/gamegear/scan-01.png"}, labelFlipY = true, labelMirrorX = false, labelRotate180 = false, rotateXZ = false, rotateZ180 = false, angleOffsetY = 0, noDecimate = true, color = {0.20, 0.22, 0.25} }, -- same as Genesis
     { name = "Genesis", short = "GEN", file = "models/genesis.obj", labelPlatform = "genesis", labelVariants = {"labels/genesis/scan-01.png"}, labelMirrorX = true, labelRotate180 = true, color = {0.20, 0.22, 0.25} },
     { name = "Nintendo DS", short = "NDS", file = "models/nds.obj", labelPlatform = "nds", labelVariants = {"labels/nds/scan-01.png"}, labelFlipY = true, color = {0.62, 0.64, 0.68} },
-    { name = "Switch Cartridge", short = "SWITCH", file = "models/switch.obj", labelPlatform = "switch", color = {0.78, 0.26, 0.30} },
+    { name = "Switch Cartridge", short = "SWITCH", file = "models/switch.obj", labelPlatform = "switch", color = {1, 1, 1} },
     { name = "PlayStation Vita", short = "VITA", file = "models/vita.obj", labelPlatform = "vita", color = {0.32, 0.36, 0.58} },
     { name = "UMD Disc", short = "UMD", file = "models/umd.obj", labelPlatform = "psp", angleOffsetY = math.pi, rotateZ180 = false, color = {0.55, 0.58, 0.64} },
     { name = "Compact Disc", short = "CD", file = "models/disc.obj", labelPlatform = "psx", color = {0.42, 0.70, 0.68} },
     { name = "PAL Cartridge", short = "PAL", file = "models/snes-pal.obj", labelPlatform = "snes", labelFlipY = true, color = {0.66, 0.48, 0.25} },
     { name = "3DS Cartridge", short = "3DS", file = "models/3ds.obj", labelPlatform = "3ds", color = {0.72, 0.28, 0.48} },
     { name = "Neo Geo", short = "NEO GEO", file = "models/neogeo.obj", labelPlatform = "neogeo", labelVariants = {"labels/neogeo/scan-01.png"}, labelFlipY = false, labelMirrorX = true, labelRotate = true, labelRotate180 = true, labelScale = 0.25, labelOffsetX = 1.5, color = {0.62, 0.64, 0.68} },
+    { name = "Dreamcast Disc", short = "DC", file = "models/dreamcast.obj", labelPlatform = "dreamcast", color = {0.84, 0.86, 0.88} },
+    { name = "Saturn Disc", short = "SAT", file = "models/dreamcast.obj", labelPlatform = "saturn", color = {0.80, 0.82, 0.85} },
 }
 
 local selected, carouselPosition, targetPosition, pulse, analogTurn, modelZoom, targetZoom, zoomed, solidModels, font, titleFont, smallFont, platformFont, metadataPlatformFont = 1, 0, 0, 0, 0, 0, 1, false, true, nil, nil, nil, nil, nil
@@ -61,10 +65,15 @@ local selectedAngleBlend = 1
 local status = "LOADING LOCAL MESHES"
 local meshShader
 local logoShader
+local shellTexture
+local backdropCanvas
 local scanBusy = false
 local zoomKeyHeld = false
 local zoomPadHeld = false
 local zoomToggleCooldown = 0
+local launchAnimating = false
+local launchElapsed = 0
+local pendingLaunchCommand
 local gameMetadataCache = {}
 local appUptime = 0
 local exitReason = "external/window close"
@@ -72,6 +81,9 @@ local exitReason = "external/window close"
 local function clamp(v, a, b) return math.max(a, math.min(b, v)) end
 local function wrap(n, max) return ((n - 1) % max) + 1 end
 local function lerp(a, b, t) return a + (b - a) * t end
+local function isDisc(item)
+    return item and (item.labelPlatform == "dreamcast" or item.labelPlatform == "saturn")
+end
 
 local function setAnalogTurn(value)
     local deadzone = 0.14
@@ -94,7 +106,7 @@ local function loadObj(item)
     local raw = love.filesystem.read(item.file)
     if not raw then return nil, "missing " .. item.file end
     local vertices, texcoords, normals, faces = {}, {}, {}, {}
-    local currentColor = item.color
+    local currentColor = {1, 1, 1}
     local currentLabel = 0
     local labelMinX, labelMinY = math.huge, math.huge
     local labelMaxX, labelMaxY = -math.huge, -math.huge
@@ -140,7 +152,7 @@ local function loadObj(item)
                     if ni < 0 then ni = #normals + ni + 1 end
                     points[#points + 1] = {vi, ti, ni}
                 end
-                for i = 2, #points - 1 do faces[#faces + 1] = {points[1], points[i], points[i + 1], currentLabel} end
+                for i = 2, #points - 1 do faces[#faces + 1] = {points[1], points[i], points[i + 1], currentLabel, currentColor} end
             end
         end
     end
@@ -173,7 +185,7 @@ local function loadObj(item)
                 (point[1] - cx) * scale, (point[2] - cy) * scale, (point[3] - cz) * scale,
                 normal[1], normal[2], normal[3],
                 uv[1], uv[2],
-                1, 1, 1, f[4],
+                f[5][1], f[5][2], f[5][3], f[4],
             }
             -- Keep label faces in the opaque shell as a gray backing panel.
             -- The separate label pass adds artwork only to the front-facing
@@ -201,6 +213,38 @@ local function drawModel(item, slot, topMost)
     local active = item == visibleModels[selected]
     local angleBlend = active and selectedAngleBlend or 0
     local angle = HERO_ANGLE + ((rotations[selected] or 0) - HERO_ANGLE) * angleBlend + (item.angleOffsetY or 0)
+    local launchYOffset = 0
+    local discRoll = 0
+    if active and launchAnimating then
+        local duration = isDisc(item) and DISC_LAUNCH_ANIMATION_TIME or LAUNCH_ANIMATION_TIME
+        local t = clamp(launchElapsed / duration, 0, 1)
+        if isDisc(item) then
+            -- Complete one full turn before the disc enters the drive.
+            local spinEnd = 0.58
+            if t < spinEnd then
+                local spin = t / spinEnd
+                local smoothSpin = spin * spin * (3 - 2 * spin)
+                local lift = math.sin(math.min(spin / 0.30, 1) * math.pi * 0.5)
+                launchYOffset = 0.34 * lift
+                discRoll = TAU * smoothSpin
+                angle = angle - 0.12 * math.sin(spin * math.pi)
+            else
+                local drop = (t - spinEnd) / (1 - spinEnd)
+                launchYOffset = 0.34 - 5.5 * drop * drop
+                discRoll = TAU
+            end
+        else
+            -- Cartridges make one face/back/face flip before insertion.
+            local smoothFlip = t * t * (3 - 2 * t)
+            angle = angle + TAU * smoothFlip
+            if t < 0.28 then
+                launchYOffset = 0.36 * math.sin((t / 0.28) * math.pi * 0.5)
+            else
+                local drop = (t - 0.28) / 0.72
+                launchYOffset = 0.36 - 5.2 * drop * drop * drop
+            end
+        end
+    end
     -- Add a gap on each side of the selected cartridge only. The constant
     -- offset keeps spacing between the unselected cartridges unchanged.
     -- Keep the hero's larger physical footprint clear of its neighbors while
@@ -211,9 +255,9 @@ local function drawModel(item, slot, topMost)
     local offset = slot * 2.35 + selectedGap
     local selectedScale = item.labelPlatform == "snes" and 3.10
         or item.labelPlatform == "genesis" and 3.10
-        or item.labelPlatform == "gamegear" and 2.25
+        or item.labelPlatform == "gamegear" and 2.85
         or item.labelPlatform == "neogeo" and 2.35
-        or 2.05
+        or 3.05
     -- Side cartridges remain large enough to read as objects, but their
     -- centers sit outside the panel so the viewport naturally crops them.
     local baseScale = 1.06 - math.min(math.abs(slot), 3) * 0.14
@@ -224,13 +268,15 @@ local function drawModel(item, slot, topMost)
     local scale = active and (selectedScale * zoomFactor) or baseScale
     local alpha = 1
     meshShader:send("angle", angle)
+    meshShader:send("discRoll", discRoll)
+    meshShader:send("discMaterial", isDisc(item) and 1 or 0)
     -- The legacy 720px layout lifts the model to make room below it. On the
     -- RG DS upper 640x480 panel the selected cartridge should be centered.
     local modelYOffset = love.graphics.getHeight() <= 600 and 0.0 or 0.20
     -- On the two-panel surface the mesh projection is centered on the
     -- combined canvas by LÖVE's window transform. Move the carousel's world
     -- origin left by one panel-center so the hero cartridge lands at x=320.
-    meshShader:send("offset", {offset + (item.centerOffsetX or 0), modelYOffset})
+    meshShader:send("offset", {offset + (item.centerOffsetX or 0), modelYOffset + launchYOffset})
     meshShader:send("modelScale", scale)
     meshShader:send("labelPass", 0)
     -- Game Boy carts use the same neutral gray as GBC, except Zelda titles
@@ -301,18 +347,47 @@ local function cycleLabel()
 end
 
 local function loadLabelTextures(item)
-    if not item.labelVariants then return end
     item.labelTextures = {}
     item.labelVariant = 1
-    for variant, path in ipairs(item.labelVariants) do
+    for variant, path in ipairs(item.labelVariants or {}) do
         local ok, image = pcall(love.graphics.newImage, path, {linear = true})
         if ok and image then
             image:setFilter("linear", "linear")
             image:setWrap("clamp", "clamp")
-            item.labelTextures[#item.labelTextures + 1] = image
+            item.labelTextures[variant] = image
+        else
+            item.labelTextures[variant] = item.fallbackTexture
         end
     end
-    if #item.labelTextures == 0 then item.labelTextures = nil end
+    if #item.labelTextures == 0 then item.labelTextures = {item.fallbackTexture} end
+end
+
+local function makeFallbackTexture(item)
+    local canvas = love.graphics.newCanvas(512, 512)
+    love.graphics.push("all")
+    love.graphics.setCanvas(canvas)
+    love.graphics.clear(0.89, 0.92, 0.91, 1)
+    love.graphics.setColor(0.11, 0.20, 0.27, 1)
+    love.graphics.rectangle("fill", 0, 0, 512, 80)
+    love.graphics.setColor(0.11, 0.20, 0.27, 1)
+    love.graphics.rectangle("fill", 24, 128, 464, 280)
+    love.graphics.setColor(0.68, 0.76, 0.78, 1)
+    love.graphics.rectangle("fill", 24, 104, 464, 4)
+    if item.logo then
+        local scale = math.min(420 / item.logo:getWidth(), 220 / item.logo:getHeight())
+        local width, height = item.logo:getWidth() * scale, item.logo:getHeight() * scale
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(item.logo, (512 - width) / 2, 166 + (220 - height) / 2, 0, scale, scale)
+    end
+    love.graphics.setFont(titleFont)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf(item.short, 24, 19, 464, "center")
+    love.graphics.setColor(0.11, 0.20, 0.27, 1)
+    love.graphics.printf(item.name:upper(), 24, 415, 464, "center")
+    love.graphics.setCanvas()
+    love.graphics.pop()
+    canvas:setFilter("linear", "linear")
+    return canvas
 end
 
 local function showPlatform(index)
@@ -376,7 +451,9 @@ local function rebuildVisibleModels()
                     game.name = (romPath:match("([^/]+)$") or romPath):gsub("%.[^%.]+$", "")
                     game.platformName = item.name
                     game.labelVariants = nil
-                    game.labelTextures = nil
+                    game.labelTextures = {item.fallbackTexture}
+                    game.labelScale = 1
+                    game.labelOffsetX, game.labelOffsetY = 0, 0
                     game.scrapeRomPaths = nil
                     game.romPath = romPath
                     game.screenshotTexture = item.screenshotsByRom and item.screenshotsByRom[romPath] or nil
@@ -391,7 +468,9 @@ local function rebuildVisibleModels()
                 game.name = item.name
                 game.platformName = item.name
                 game.labelVariants = nil
-                game.labelTextures = nil
+                game.labelTextures = {item.fallbackTexture}
+                game.labelScale = 1
+                game.labelOffsetX, game.labelOffsetY = 0, 0
                 game.scrapeRomPaths = nil
                 game.mesh = item.mesh
                 game.gameIndex = 1
@@ -458,6 +537,7 @@ local function refreshScannedLabels()
             local logoOk, logo = pcall(love.graphics.newImage, logoPath, {linear = true})
             item.logo = logoOk and logo or nil
             if item.logo then item.logo:setFilter("linear", "linear") end
+            if not item.fallbackTexture then item.fallbackTexture = makeFallbackTexture(item) end
             local manifest = love.filesystem.read(dir .. "/scan-index.txt")
             if manifest then
                 for line in manifest:gmatch("[^\r\n]+") do
@@ -498,6 +578,38 @@ local function selectCover(delta)
     if item and item.labelTextures and #item.labelTextures > 0 then
         item.coverIndex = wrap((item.coverIndex or 1) + delta, #item.labelTextures)
     end
+end
+
+local function beginLaunchSelectedRom()
+    if launchAnimating then return end
+    local item = visibleModels[selected]
+    if not item then return end
+    local romPath = item.romPath
+    if not romPath and item.labelVariants and item.scrapeRomPaths then
+        local imagePath = item.labelVariants[item.coverIndex or 1]
+        romPath = item.scrapeRomPaths[imagePath]
+    end
+    if not romPath or romPath == "" then
+        status = "ROM PATH NOT FOUND"
+        return
+    end
+    local cores = {
+        gb = "gambatte", gbc = "gambatte", nes = "nestopia", snes = "snes9x",
+        n64 = "mupen64plus_next", gba = "mgba", nds = "drastic-sa",
+        gamegear = "genesis_plus_gx", genesis = "genesis_plus_gx",
+        psp = "ppsspp", psx = "pcsx_rearmed32", ["3ds"] = "azahar", neogeo = "fbneo",
+        dreamcast = "flycast", saturn = "yabasanshiro",
+    }
+    if item.labelPlatform == "nds" then
+        -- ROCKNIX's native dual-screen NDS path is DraStic, not a libretro
+        -- core. Its compositor rule owns the 1280x480 two-panel placement.
+        pendingLaunchCommand = string.format("/usr/bin/runemu.sh %q -Pnds --core=drastic-sa --emulator=drastic >/tmp/rocknix-carousel-launch.log 2>&1 & nohup sh '/roms/ports/Cartrix/fullscreen-drastic.sh' >/tmp/rocknix-drastic-fullscreen.log 2>&1 </dev/null &", romPath)
+    else
+        pendingLaunchCommand = string.format("/usr/bin/runemu.sh %q -P%s --core=%s --emulator=retroarch >/tmp/rocknix-carousel-launch.log 2>&1 & nohup sh '/roms/ports/Cartrix/fullscreen-retroarch.sh' >/tmp/rocknix-retroarch-fullscreen.log 2>&1 </dev/null &", romPath, item.labelPlatform, cores[item.labelPlatform] or "")
+    end
+    status = "LAUNCHING " .. item.name
+    launchElapsed = 0
+    launchAnimating = true
 end
 
 local function selectedRomName()
@@ -587,8 +699,12 @@ function love.load()
         varying vec3 vNormal;
         varying vec2 vUV;
         varying float vLabel;
+        varying vec3 vMaterialColor;
+        varying vec2 vBodyUV;
+        varying vec2 vDiscPos;
         varying vec3 vViewPos;
         extern number angle;
+        extern number discRoll;
         extern vec2 offset;
         extern number modelScale;
         extern number aspect;
@@ -615,6 +731,9 @@ function love.load()
                 p = vec3(-p.x, -p.y, p.z);
                 n = vec3(-n.x, -n.y, n.z);
             }
+            float cr = cos(discRoll), sr = sin(discRoll);
+            p = vec3(cr * p.x - sr * p.y, sr * p.x + cr * p.y, p.z);
+            n = vec3(cr * n.x - sr * n.y, sr * n.x + cr * n.y, n.z);
             p = vec3(cy * p.x + sy * p.z, p.y, -sy * p.x + cy * p.z);
             n = vec3(cy * n.x + sy * n.z, n.y, -sy * n.x + cy * n.z);
             if (topMost > 0.5) p.z -= 4.0;
@@ -624,6 +743,12 @@ function love.load()
             vNormal = normalize(n);
             vUV = VertexTexCoord.xy;
             vLabel = VertexColor.a;
+            vMaterialColor = VertexColor.rgb;
+            vDiscPos = vertex_position.xy;
+            vec3 surfaceAxis = abs(VertexNormal);
+            vBodyUV = surfaceAxis.z > surfaceAxis.x && surfaceAxis.z > surfaceAxis.y
+                ? vertex_position.xy * 5.0
+                : (surfaceAxis.y > surfaceAxis.x ? vertex_position.xz * 5.0 : vertex_position.yz * 5.0);
             vViewPos = -p;
             float zclip = -1.002 * p.z - 0.2002;
             float localX = p.x * 1.55 / aspect;
@@ -638,8 +763,12 @@ function love.load()
         varying vec3 vNormal;
         varying vec2 vUV;
         varying float vLabel;
+        varying vec3 vMaterialColor;
+        varying vec2 vBodyUV;
+        varying vec2 vDiscPos;
         varying vec3 vViewPos;
         extern vec3 baseColor;
+        extern number discMaterial;
         extern number labelFlipY;
         extern number labelMirrorX;
         extern number labelCropY;
@@ -668,7 +797,20 @@ function love.load()
             // Apply the aspect crop after rotation so GBA artwork is cropped
             // on the label's actual vertical axis rather than the source axis.
             labelUV.y = (labelUV.y - 0.5) * labelCropY + 0.5;
-            vec3 material = baseColor;
+            vec3 material = baseColor * vMaterialColor;
+            vec3 discShine = vec3(0.0);
+            if (discMaterial > 0.5) {
+                float radius = length(vDiscPos);
+                vec2 tangent = normalize(vec2(-vDiscPos.y, vDiscPos.x) + vec2(0.0001));
+                vec2 lightSweep = normalize(vec2(0.6, 0.8) + V.xy * 0.5);
+                float arc = pow(max(dot(tangent, lightSweep), 0.0), 3.0);
+                float phase = radius * 0.8 + atan(vDiscPos.y, vDiscPos.x) * 0.8;
+                vec3 spectrum = 0.5 + 0.5 * sin(vec3(phase, phase + 2.1, phase + 4.2));
+                discShine = spectrum * arc * 0.18;
+            } else if (labelPass < 0.5) {
+                float grain = Texel(tex, vBodyUV).r;
+                material *= 0.94 + grain * 0.09;
+            }
             // Only apply artwork when the label face points toward the camera.
             // From the rear, show the cartridge body instead of the label back.
             if (labelPass > 0.5 && dot(N, V) <= 0.0) discard;
@@ -678,14 +820,30 @@ function love.load()
                 fittedUV.y += labelOffsetY;
                 if (fittedUV.x >= 0.0 && fittedUV.x <= 1.0 && fittedUV.y >= 0.0 && fittedUV.y <= 1.0) {
                     material = Texel(tex, fittedUV).rgb;
+                    if (discMaterial > 0.5) material = min(material + discShine * 0.35, vec3(1.0));
                     return vec4(material, 1.0);
                 }
+            }
+            if (discMaterial > 0.5) {
+                float metalLight = 0.65 + 0.28 * abs(dot(N, L));
+                float metalSpec = pow(max(abs(dot(N, H)), 0.0), 48.0) * 0.55;
+                vec3 silver = vec3(0.82, 0.86, 0.90) * metalLight;
+                return vec4(min(silver + discShine + vec3(metalSpec), vec3(1.0)), 1.0);
             }
             return vec4(material * (ambient + diffuse * 0.75) + vec3(specular), 1.0);
         }
     ]])
+    shellTexture = love.graphics.newImage("textures/shell-grain.png")
+    shellTexture:setFilter("linear", "linear")
+    shellTexture:setWrap("repeat", "repeat")
+    local loadedMeshes = {}
     for _, item in ipairs(models) do
-        item.mesh = loadObj(item)
+        item.mesh = loadedMeshes[item.file]
+        if not item.mesh then
+            item.mesh = loadObj(item)
+            loadedMeshes[item.file] = item.mesh
+        end
+        if item.mesh then item.mesh.mesh:setTexture(shellTexture) end
         if item.labelVariants then
             item.baseLabelVariants = item.labelVariants
         end
@@ -702,7 +860,9 @@ function love.load()
             break
         end
     end
-    if hasScanCache then
+    local needsDiscScan = not love.filesystem.getInfo("labels/dreamcast/rom-index.txt")
+        or not love.filesystem.getInfo("labels/saturn/rom-index.txt")
+    if hasScanCache and not needsDiscScan then
         refreshScannedLabels()
         status = "CACHED LIBRARY LOADED · PRESS S TO RESCAN"
     else
@@ -717,6 +877,9 @@ end
 function love.quit()
     io.stderr:write(string.format("Exit: %s after %.2fs\n", exitReason, appUptime))
     io.stderr:flush()
+    -- The launch watcher owns focus and frontend restoration while a game is
+    -- running. Restoring here would race RetroArch and steal its fullscreen.
+    if exitReason == "game launch" then return end
     -- Return the device to the normal single top-screen frontend whenever
     -- Cartrix exits directly (Escape/Start).
     local restore = "export XDG_RUNTIME_DIR=\"${XDG_RUNTIME_DIR:-/var/run/0-runtime-dir}\"; " ..
@@ -738,6 +901,19 @@ function love.update(dt)
     pulse = pulse + dt
     if zoomToggleCooldown > 0 then
         zoomToggleCooldown = math.max(0, zoomToggleCooldown - dt)
+    end
+    if launchAnimating then
+        launchElapsed = launchElapsed + dt
+        local duration = isDisc(visibleModels[selected]) and DISC_LAUNCH_ANIMATION_TIME or LAUNCH_ANIMATION_TIME
+        if launchElapsed >= duration then
+            local command = pendingLaunchCommand
+            pendingLaunchCommand = nil
+            launchAnimating = false
+            exitReason = "game launch"
+            if command then os.execute(command) end
+            love.event.quit()
+            return
+        end
     end
     carouselPosition = lerp(carouselPosition, targetPosition, 1 - math.exp(-dt / SLIDE_TIME))
     selectedAngleBlend = lerp(selectedAngleBlend, 1, 1 - math.exp(-dt / 0.24))
@@ -772,6 +948,7 @@ local function requestExit(reason)
 end
 
 function love.keypressed(key)
+    if launchAnimating then return end
     if key == "left" or key == "a" then select(-1)
     elseif key == "right" or key == "d" then select(1)
     elseif key == "r" then selectPlatform(1)
@@ -782,20 +959,47 @@ function love.keypressed(key)
         zoomKeyHeld = true
         zoomToggleCooldown = 0.75
         toggleZoom()
+    elseif key == "return" or key == "space" then beginLaunchSelectedRom()
     elseif key == "escape" or key == "backspace" then requestExit("keyboard " .. key) end
 end
 
 function love.gamepadpressed(_, button)
+    if launchAnimating then return end
     if button == "dpleft" then select(-1)
     elseif button == "dpright" then select(1)
     elseif button == "leftshoulder" then selectPlatform(-1)
     elseif button == "rightshoulder" then selectPlatform(1)
     elseif button == "y" then scanScrapedData()
+    -- The RG DS SDL mapping reports its physical A button as "b" and its
+    -- physical B button as "a". Keep behavior aligned with the printed
+    -- button labels: physical A launches, physical B goes back.
+    elseif button == "b" then beginLaunchSelectedRom()
+    elseif button == "a" then requestExit("physical B")
     elseif button == "x" and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
         zoomPadHeld = true
         zoomToggleCooldown = 0.75
         toggleZoom()
     elseif button == "back" or button == "start" then requestExit("gamepad " .. button) end
+end
+
+function love.joystickpressed(joystick, button)
+    -- Some ROCKNIX sessions expose the built-in controller as a raw joystick
+    -- instead of loading its SDL gamepad mapping. In that state kernel events
+    -- arrive, but love.gamepadpressed never fires. Use the evdev button order
+    -- as a fallback and avoid duplicate actions when it is a mapped gamepad.
+    if joystick:isGamepad() or launchAnimating then return end
+    if button == 16 then select(-1)                    -- D-pad Left
+    elseif button == 17 then select(1)                 -- D-pad Right
+    elseif button == 5 then selectPlatform(-1)         -- L
+    elseif button == 6 then selectPlatform(1)          -- R
+    elseif button == 4 then scanScrapedData()          -- physical Y
+    elseif button == 2 then beginLaunchSelectedRom()   -- physical A
+    elseif button == 1 then requestExit("physical B raw")
+    elseif button == 3 and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
+        zoomPadHeld = true
+        zoomToggleCooldown = 0.75
+        toggleZoom()
+    elseif button == 9 or button == 10 then requestExit("raw start/select") end
 end
 
 function love.keyreleased(key)
@@ -804,6 +1008,10 @@ end
 
 function love.gamepadreleased(_, button)
     if button == "x" then zoomPadHeld = false end
+end
+
+function love.joystickreleased(joystick, button)
+    if not joystick:isGamepad() and button == 3 then zoomPadHeld = false end
 end
 
 function love.joystickaxis(_, axis, value)
@@ -864,9 +1072,26 @@ local function drawRoundedImage(image, x, y, width, height, radius)
     return true
 end
 
+local function drawCarouselBackdrop(x, y, width, height)
+    if not backdropCanvas or backdropCanvas:getWidth() ~= width or backdropCanvas:getHeight() ~= height then
+        backdropCanvas = love.graphics.newCanvas(width, height)
+        love.graphics.push("all")
+        love.graphics.setCanvas(backdropCanvas)
+        love.graphics.clear(CAROUSEL_BG)
+        love.graphics.setColor(CAROUSEL_DOT)
+        for dotY = 7, height, 20 do
+            for dotX = 8, width, 20 do
+                love.graphics.circle("fill", dotX, dotY, 1.5)
+            end
+        end
+        love.graphics.pop()
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(backdropCanvas, x, y)
+end
+
 local function drawMetadataPanel(item, x, y, width, height)
-    love.graphics.setColor(CAROUSEL_BG)
-    love.graphics.rectangle("fill", x, y, width, height)
+    drawCarouselBackdrop(x, y, width, height)
     love.graphics.setColor({0.52, 0.68, 0.74, 1})
     love.graphics.rectangle("fill", x, y, 2, height)
 
@@ -902,20 +1127,6 @@ local function drawMetadataPanel(item, x, y, width, height)
 
 end
 
-local function drawCarouselBackdrop(width, height)
-    love.graphics.setColor(CAROUSEL_BG)
-    love.graphics.rectangle("fill", 0, 0, width, height)
-
-    -- A quiet halftone/dot texture gives the blue field the same soft depth as
-    -- the reference image without adding an external bitmap dependency.
-    love.graphics.setColor(CAROUSEL_DOT)
-    for y = 7, height, 20 do
-        for x = 8, width, 20 do
-            love.graphics.circle("fill", x, y, 1.5)
-        end
-    end
-end
-
 local function drawSelectedPill(title, centerX, y)
     local label = title or "NO GAME SELECTED"
     love.graphics.setFont(titleFont)
@@ -942,7 +1153,7 @@ function love.draw()
     local panelW = dualScreen and w / 2 or w
     love.graphics.clear(BG_COLOR)
     local carouselW = dualScreen and panelW or w
-    drawCarouselBackdrop(carouselW, h)
+    drawCarouselBackdrop(0, 0, carouselW, h)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setDepthMode("less", true)
     love.graphics.setMeshCullMode("back")

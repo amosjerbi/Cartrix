@@ -22,7 +22,7 @@ for candidate in /roms /storage/roms /storage/games-internal/roms; do
 done
 
 PLATFORMS_FILE="$WORK_DIR/platforms"
-printf '%s\n' gb gbc nes snes n64 gba nds switch vita psp psx 3ds gamegear genesis > "$PLATFORMS_FILE"
+printf '%s\n' gb gbc nes snes n64 gba nds switch vita psp psx 3ds gamegear genesis dreamcast saturn > "$PLATFORMS_FILE"
 while IFS= read -r root; do
     for image_dir in "$root"/*/images; do
         [ -d "$image_dir" ] || continue
