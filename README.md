@@ -38,6 +38,21 @@ chmod +x /roms/ports/Cartrix/*.sh
 
 Launch **Cartrix** from EmulationStation's Ports menu. Its `gamelist.xml` entry should point to `./Cartrix.sh`. The launcher configures both screens, places the LÖVE window across them, and restores the normal frontend layout on exit. It tolerates display setup races after boot and retries one transient LÖVE startup failure.
 
+### Supported Platforms in launcher
+
+Dreamcast
+Gamegear
+Gameboy
+Gameboy Color
+Gameboy Advance
+Genesis
+Master System
+N64
+NDS
+Neo Geo
+SNES
+Switch (Don't see it how it'd run on Rocknix XD)
+
 ### Requirements
 
 - ROCKNIX with a working Sway/Wayland session.
