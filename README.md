@@ -2,6 +2,21 @@
 
 Cartrix is a LÖVE 3D game carousel for ROCKNIX. On the Anbernic RG DS it spans both 640×480 displays with one borderless 1280×480 window. Select a game to see its cartridge or disc, artwork, screenshot, and play metadata, then press A to launch it.
 
+## Supported Platforms in launcher
+
+- Dreamcast
+- Gamegear
+- Gameboy
+- Gameboy Color
+- Gameboy Advance
+- Genesis
+- Master System
+- N64
+- NDS
+- Neo Geo
+- SNES
+- Switch (Don't see it how it'd run on Rocknix XD)
+
 ## Current release
 
 - The upper display shows a 3D model and game title. The lower display shows `MAIN STORY`, `PLAYED TIME`, and a screenshot. Both displays share the pale blue dotted background.
@@ -37,21 +52,6 @@ chmod +x /roms/ports/Cartrix/*.sh
 ```
 
 Launch **Cartrix** from EmulationStation's Ports menu. Its `gamelist.xml` entry should point to `./Cartrix.sh`. The launcher configures both screens, places the LÖVE window across them, and restores the normal frontend layout on exit. It tolerates display setup races after boot and retries one transient LÖVE startup failure.
-
-### Supported Platforms in launcher
-
-- Dreamcast
-- Gamegear
-- Gameboy
-- Gameboy Color
-- Gameboy Advance
-- Genesis
-- Master System
-- N64
-- NDS
-- Neo Geo
-- SNES
-- Switch (Don't see it how it'd run on Rocknix XD)
 
 ### Requirements
 
