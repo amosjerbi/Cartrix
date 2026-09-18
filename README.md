@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="/cartrix-gg.png" alt="gg" width="320" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="/cartrix-genesis.png" alt="genesis" width="320" />
+</p>
+
 # Cartrix
 
 Cartrix is a LÖVE 3D game carousel for ROCKNIX. On the Anbernic RG DS it spans both 640×480 displays with one borderless 1280×480 window. Select a game to see its cartridge or disc, artwork, screenshot, and play metadata, then press A to launch it.
