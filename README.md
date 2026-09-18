@@ -40,18 +40,18 @@ Launch **Cartrix** from EmulationStation's Ports menu. Its `gamelist.xml` entry 
 
 ### Supported Platforms in launcher
 
-Dreamcast
-Gamegear
-Gameboy
-Gameboy Color
-Gameboy Advance
-Genesis
-Master System
-N64
-NDS
-Neo Geo
-SNES
-Switch (Don't see it how it'd run on Rocknix XD)
+- Dreamcast
+- Gamegear
+- Gameboy
+- Gameboy Color
+- Gameboy Advance
+- Genesis
+- Master System
+- N64
+- NDS
+- Neo Geo
+- SNES
+- Switch (Don't see it how it'd run on Rocknix XD)
 
 ### Requirements
 
