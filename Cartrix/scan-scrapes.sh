@@ -71,7 +71,7 @@ while IFS= read -r platform; do
     wanted_art="$WORK_DIR/$platform.art-wanted"
     : > "$seen_art"; : > "$wanted_art"
     index=1
-    for suffix in '-thumb.png' '-image.png' '-marquee.png'; do
+    for suffix in '-cartridge.png' '-thumb.png' '-image.png' '-marquee.png'; do
         while IFS= read -r file; do
             [ "$index" -le 24 ] || break
             case "${file##*/}" in *"$suffix") ;; *) continue ;; esac
