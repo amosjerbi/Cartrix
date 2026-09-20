@@ -16,23 +16,23 @@ local LAUNCH_ANIMATION_TIME = 0.82
 local DISC_LAUNCH_ANIMATION_TIME = 1.35
 local MAX_MODEL_ZOOM = 1.35
 
--- Interface palette
-local BG_COLOR = {0.0509804, 0.1058824, 0.1686275, 1} -- #0D1B2B
-local GAME_TITLE_COLOR = {0.7803922, 0.6627451, 0.4196078, 1} -- #C7A96B
-local SUBTITLE_COLOR = {0.7803922, 0.6627451, 0.4196078, 1} -- #C7A96B
-local LOGO_COLOR = {0.4352941, 0.5607843, 0.6588235, 1} -- #6F8FA8
-local PANEL_COLOR = {0.0784314, 0.1568627, 0.2392157, 1} -- #14283D
-local BORDER_COLOR = {0.1607843, 0.2666667, 0.3568627, 1} -- #29445B
-local ACCENT_COLOR = {0.7803922, 0.6627451, 0.4196078, 1} -- #C7A96B
+-- Cool sport palette sampled from the supplied reference.
+local BG_COLOR = {0.8314, 0.8510, 0.8745, 1} -- #D4D9DF pale blue-gray
+local GAME_TITLE_COLOR = {0.2980, 0.3686, 0.7216, 1} -- #4C5EB8 royal blue
+local SUBTITLE_COLOR = {0.1529, 0.2039, 0.3725, 1} -- #27345F deep blue
+local LOGO_COLOR = {0.2980, 0.3686, 0.7216, 1} -- #4C5EB8
+local PANEL_COLOR = {0.7294, 0.8118, 0.8431, 1} -- #BACFD7 powder blue
+local BORDER_COLOR = {0.3804, 0.5804, 0.5647, 1} -- #619490 teal
+local ACCENT_COLOR = {0.9216, 0.7686, 0.1725, 1} -- #EBC42C yellow
 
--- Upper-screen carousel palette.  The lower RG DS panel keeps the dark
--- metadata treatment; only the cartridge presentation uses this softer field.
-local CAROUSEL_BG = {0.70, 0.82, 0.87, 1}
-local CAROUSEL_DOT = {0.88, 0.94, 0.95, 0.46}
-local CAROUSEL_TEXT = {0.08, 0.19, 0.31, 1}
-local CAROUSEL_PILL = {0.93, 0.96, 0.96, 0.92}
-local CAROUSEL_BUTTON = {0.34, 0.51, 0.59, 0.96}
-local CAROUSEL_BUTTON_BG = {0.58, 0.69, 0.74, 0.96}
+-- Pale blue surfaces carry the field; yellow, royal blue, and teal reproduce
+-- the shoes and geometric accents from the reference.
+local CAROUSEL_BG = {0.8314, 0.8510, 0.8745, 1} -- #D4D9DF
+local CAROUSEL_DOT = {0.3804, 0.5804, 0.5647, 0.48} -- #619490 darker teal
+local CAROUSEL_TEXT = {0.1529, 0.2039, 0.3725, 1} -- #27345F
+local CAROUSEL_PILL = {1.0000, 1.0000, 1.0000, 0.97} -- #FFFFFF
+local CAROUSEL_BUTTON = {0.2980, 0.3686, 0.7216, 1} -- #4C5EB8 system logos
+local CAROUSEL_BUTTON_BG = {0.9216, 0.7686, 0.1725, 1} -- #EBC42C
 
 local models = {
     { name = "Game Boy", short = "GB", file = "models/gb.obj", labelPlatform = "gb", labelVariants = {"labels/gb/scan-01.png", "labels/gb/scan-02.png"}, labelFlipY = true, angleOffsetY = 0, centerOffsetX = 0.24, color = {0.62, 0.64, 0.68} },
@@ -1138,40 +1138,73 @@ local function drawCarouselBackdrop(x, y, width, height)
     love.graphics.draw(backdropCanvas, x, y)
 end
 
+local function drawControlPill(x, y, width)
+    local height = 43
+    local controls = {
+        {button = "S", action = "Exit"},
+        {button = "X", action = "Zoom"},
+        {button = "Y", action = "Scan"},
+    }
+
+    local sectionWidth = width / #controls
+    for index, control in ipairs(controls) do
+        local sectionX = x + (index - 1) * sectionWidth
+        local actionWidth = titleFont:getWidth(control.action)
+        local contentWidth = 18 + 7 + actionWidth
+        local contentX = sectionX + (sectionWidth - contentWidth) / 2
+
+        love.graphics.setColor(CAROUSEL_TEXT)
+        love.graphics.circle("fill", contentX + 9, y + height / 2, 9)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setFont(smallFont)
+        love.graphics.printf(control.button, contentX + 2, y + 14, 14, "center")
+        love.graphics.setColor(CAROUSEL_TEXT)
+        love.graphics.setFont(titleFont)
+        love.graphics.print(control.action, contentX + 25, y + 9)
+    end
+end
+
+local function drawMetricCard(label, value, x, y, width)
+    love.graphics.setColor(CAROUSEL_TEXT)
+    love.graphics.setFont(smallFont)
+    -- A one-pixel repeat gives the compact heading a bold weight without
+    -- adding an external font dependency to the launcher package.
+    love.graphics.print(label, x + 18, y + 14)
+    love.graphics.print(label, x + 19, y + 14)
+
+    love.graphics.setColor(CAROUSEL_TEXT)
+    love.graphics.setFont(titleFont)
+    love.graphics.printf(value, x + 18, y + 45, width - 36, "left")
+end
+
 local function drawMetadataPanel(item, x, y, width, height)
     drawCarouselBackdrop(x, y, width, height)
-    love.graphics.setColor({0.52, 0.68, 0.74, 1})
+    love.graphics.setColor(ACCENT_COLOR)
     love.graphics.rectangle("fill", x, y, 2, height)
 
-    -- Keep game metadata on the left and reserve the right side for the
-    -- screenshot, matching the requested two-column lower-screen layout.
-    local leftX = x + 28
-    local leftW = width * 0.42
+    -- Merge metadata and screenshot into one white two-column card.
+    local cardX, cardY = x + 28, y + 42
+    local cardW, cardH = width - 56, height - 126
+    love.graphics.setColor(CAROUSEL_PILL)
+    love.graphics.rectangle("fill", cardX, cardY, cardW, cardH, 18, 18)
+
+    local leftX = cardX + 4
+    local leftW = cardW * 0.38
     local mainStory, playedTime = gameMetadata(item)
-    love.graphics.setColor(CAROUSEL_TEXT)
-    love.graphics.setFont(metadataPlatformFont)
-    love.graphics.printf("MAIN STORY", leftX, y + 100, leftW, "left")
-    love.graphics.setFont(titleFont)
-    love.graphics.printf(mainStory, leftX, y + 132, leftW - 16, "left")
-    love.graphics.setFont(metadataPlatformFont)
-    love.graphics.printf("PLAYED TIME", leftX, y + 220, leftW, "left")
-    love.graphics.setFont(titleFont)
-    love.graphics.printf(playedTime, leftX, y + 252, leftW - 16, "left")
+    drawMetricCard("MAIN STORY", mainStory, leftX, cardY + 42, leftW)
+    drawMetricCard("PLAYED TIME", playedTime, leftX, cardY + 152, leftW)
 
     -- Screenshots belong exclusively to the lower panel. The 3D model above
     -- continues to use the cover texture through currentCover(item).
     local cover = item and (item.screenshotTexture or currentCover(item)) or nil
-    local imageX, imageY = x + width * 0.46, y + 42
-    local imageW, imageH = width * 0.50 - 28, height - 84
-    drawRoundedImage(cover, imageX, imageY, imageW, imageH, 18)
+    local imageX, imageY = cardX + cardW * 0.42, cardY + 8
+    local imageW, imageH = cardW * 0.58 - 8, cardH - 16
+    drawRoundedImage(cover, imageX, imageY, imageW, imageH, 12)
 
-    -- Controls belong to the second screen alongside the game metadata.
-    love.graphics.setFont(smallFont)
-    love.graphics.setColor(CAROUSEL_TEXT)
-    local instructionY = y + height - smallFont:getHeight() - 8
-    love.graphics.print("Start - Exit", x + 18, instructionY)
-    love.graphics.printf("X - Zoom", x, instructionY, width, "center")
-    love.graphics.printf("Y - Scan", x + width - 190, instructionY, 172, "right")
+    -- Present all lower-screen actions as one control, matching the selected
+    -- game pill on the upper screen instead of three disconnected text hints.
+    local controlWidth = cardW
+    drawControlPill(cardX, y + height - 58, controlWidth)
 
 end
 
