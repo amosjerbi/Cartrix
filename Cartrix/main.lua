@@ -590,12 +590,12 @@ local function refreshScannedLabels()
                     end
                 end
             end
-            local screenshotManifest = love.filesystem.read("screenshots/" .. item.labelPlatform .. "/screenshot-index.txt")
+            local screenshotManifest = love.filesystem.read(dir .. "/screenshot-index.txt")
             if screenshotManifest then
                 for line in screenshotManifest:gmatch("[^\r\n]+") do
                     local imageName, romPath = line:match("^([^|]+)|(.+)$")
                     if imageName and romPath and imageName ~= "" and romPath ~= "" then
-                        local ok, image = pcall(love.graphics.newImage, "screenshots/" .. item.labelPlatform .. "/" .. imageName, {linear = true})
+                        local ok, image = pcall(love.graphics.newImage, dir .. "/" .. imageName, {linear = true})
                         if ok and image then
                             image:setFilter("linear", "linear")
                             item.screenshotsByRom[romPath] = image
@@ -720,6 +720,24 @@ local function scanScrapedData()
     os.execute("sh scan-scrapes.sh >/tmp/rocknix-carousel-scan.log 2>&1")
     refreshScannedLabels()
     status = "SCAN COMPLETE · SCRAPED LABELS LOADED"
+    scanBusy = false
+end
+
+local function fetchScreenScraperData()
+    if scanBusy then return end
+    local item = visibleModels[selected]
+    local platform = item and item.labelPlatform
+    if not platform or platform == "" then
+        status = "NO PLATFORM SELECTED"
+        return
+    end
+    scanBusy = true
+    status = "DOWNLOADING " .. platform:upper() .. " LABELS + SCREENSHOTS"
+    local ok = os.execute("sh fetch-textures.sh " .. string.format("%q", platform) .. " >/tmp/rocknix-carousel-fetch.log 2>&1")
+    refreshScannedLabels()
+    status = (ok == true or ok == 0)
+        and (platform:upper() .. " DOWNLOAD COMPLETE")
+        or (platform:upper() .. " DOWNLOAD FAILED · CHECK /tmp/rocknix-carousel-fetch.log")
     scanBusy = false
 end
 
@@ -912,12 +930,12 @@ function love.load()
         or not love.filesystem.getInfo("labels/saturn/rom-index.txt")
     if hasScanCache and not needsPlatformScan then
         refreshScannedLabels()
-        status = "CACHED LIBRARY LOADED · PRESS S TO RESCAN"
+        status = "CACHED LIBRARY LOADED · PRESS Y TO RESCAN"
     else
         scanScrapedData()
     end
     if #visibleModels == 0 then
-        status = "NO SCRAPED PLATFORMS · PRESS S TO SCAN"
+        status = "NO SCRAPED PLATFORMS · PRESS Y TO SCAN"
     end
     io.stderr:write(string.format("Startup: library ready in %.2fs\n", love.timer.getTime() - startupStarted))
 end
@@ -1003,6 +1021,7 @@ function love.keypressed(key)
     elseif key == "l" then selectPlatform(-1)
     elseif key == "s" then scanScrapedData()
     elseif key == "y" then scanScrapedData()
+    elseif key == "b" then fetchScreenScraperData()
     elseif key == "x" and not zoomKeyHeld and not zoomPadHeld and zoomToggleCooldown <= 0 then
         zoomKeyHeld = true
         zoomToggleCooldown = 0.75
@@ -1020,9 +1039,9 @@ function love.gamepadpressed(_, button)
     elseif button == "y" then scanScrapedData()
     -- The RG DS SDL mapping reports its physical A button as "b" and its
     -- physical B button as "a". Keep behavior aligned with the printed
-    -- button labels: physical A launches, physical B goes back.
+    -- button labels: physical A launches, physical B scrapes.
     elseif button == "b" then beginLaunchSelectedRom()
-    elseif button == "a" then requestExit("physical B")
+    elseif button == "a" then fetchScreenScraperData()
     elseif button == "x" and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
         zoomPadHeld = true
         zoomToggleCooldown = 0.75
@@ -1042,7 +1061,7 @@ function love.joystickpressed(joystick, button)
     elseif button == 6 then selectPlatform(1)          -- R
     elseif button == 4 then scanScrapedData()          -- physical Y
     elseif button == 2 then beginLaunchSelectedRom()   -- physical A
-    elseif button == 1 then requestExit("physical B raw")
+    elseif button == 1 then fetchScreenScraperData()   -- physical B
     elseif button == 3 and not zoomPadHeld and not zoomKeyHeld and zoomToggleCooldown <= 0 then
         zoomPadHeld = true
         zoomToggleCooldown = 0.75
@@ -1144,6 +1163,7 @@ local function drawControlPill(x, y, width)
         {button = "S", action = "Exit"},
         {button = "X", action = "Zoom"},
         {button = "Y", action = "Scan"},
+        {button = "B", action = "Scrape"},
     }
 
     local sectionWidth = width / #controls

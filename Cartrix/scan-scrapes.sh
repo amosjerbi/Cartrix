@@ -37,8 +37,8 @@ copy_if_changed() {
 
 while IFS= read -r platform; do
     out="$APP_DIR/labels/$platform"
-    screenshot_dir="$APP_DIR/screenshots/$platform"
-    mkdir -p "$out" "$screenshot_dir"
+    screenshot_dir="$out"
+    mkdir -p "$out"
     all_files="$WORK_DIR/$platform.all"
     rom_files="$WORK_DIR/$platform.roms"
     : > "$all_files"
@@ -47,6 +47,7 @@ while IFS= read -r platform; do
         [ -d "$source" ] || continue
         find "$source" -type f ! -path '*/.focus-3d/*' -print >> "$all_files"
     done < "$ROOTS_FILE"
+    find "$out" -type f -print >> "$all_files"
     sort -u "$all_files" -o "$all_files"
 
     awk -v platform="$platform" '
