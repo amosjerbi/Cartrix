@@ -1,7 +1,7 @@
 <p align="center">
   <img src="/cartrix-gg.png" alt="gg" width="320" />
   &nbsp;&nbsp;&nbsp;
-  <img src="/cartrix-genesis.png" alt="genesis" width="320" />
+  <img src="/cartrix-sms.png" alt="genesis" width="320" />
 </p>
 
 # Cartrix
