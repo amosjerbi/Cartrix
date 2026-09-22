@@ -4,6 +4,88 @@ This directory contains a custom ROCKNIX/RG DS `emulationstation` binary with a 
 
 The stock UI displayed the **SUPPORT TEXTURE** switch, but changing it did not affect the setting read by the scraper. The UI stored `ScrapeCartridge` in `SystemConf`, while ScreenScraper read it from `Settings`. As a result, support texture downloads remained disabled even when the switch appeared enabled.
 
+## Install directly on the device
+
+Copy `screenscraper-advanced.sh` and the complete `screenscraper-advanced`
+directory to the same location on the ROCKNIX device. The resulting layout
+must be:
+
+```text
+screenscraper-advanced.sh
+screenscraper-advanced/
+├── emulationstation
+└── emulationstation.sha256
+```
+
+Do not launch this version from the Ports menu. Stopping `essway.service` also
+terminates scripts launched by that service. Run the installer through SSH so
+it remains alive while EmulationStation restarts.
+
+From a computer on the same network, connect to the device:
+
+```sh
+ssh root@192.168.0.105
+```
+
+Enter the device password when prompted. The default ROCKNIX password is
+`rocknix`.
+
+After the SSH prompt appears, run this exact command:
+
+```sh
+sh /storage/roms/ports/screenscraper-advanced.sh
+```
+
+Wait for `EmulationStation patch installed successfully.` before closing the
+SSH session. Then verify each part of the installation with these individually
+copyable commands:
+
+```sh
+systemctl is-enabled emulationstation-custom.service
+```
+
+Expected result: `enabled`.
+
+```sh
+systemctl is-active emulationstation-custom.service
+```
+
+Expected result: `active`.
+
+```sh
+systemctl is-active essway.service
+```
+
+Expected result: `active`.
+
+```sh
+sha256sum /usr/bin/emulationstation
+```
+
+Expected checksum:
+
+```text
+ec11dc6bc29138a9d0b89b608d7e2566d36d829012e2a44765730687ce643773
+```
+
+Finally, confirm that EmulationStation has a running process:
+
+```sh
+pidof emulationstation
+```
+
+This should print a numeric process ID. Leave the SSH session with:
+
+```sh
+exit
+```
+
+The script verifies the device architecture and checksum, retains the prior
+custom build as
+`emulationstation.previous`, installs the persistent systemd bind mount, and
+restarts the device's EmulationStation service. It works for both first-time
+installation and later updates.
+
 ## Source fix
 
 Edit:
@@ -68,6 +150,7 @@ file emulationstation
 ```
 
 The hashes must match, and `file` must report an ARM aarch64 ELF executable.
+
 
 ## Connect to the ROCKNIX device
 
