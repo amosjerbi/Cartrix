@@ -1,244 +1,278 @@
-EmulationStation
-================
+# ROCKNIX EmulationStation Support-Texture Fix
 
-EmulationStation is a cross-platform graphical front-end for emulators with controller navigation.
+This directory contains a custom ROCKNIX/RG DS `emulationstation` binary with a fix for ScreenScraper **support textures** (cartridge labels).
 
-Building
-========
+The stock UI displayed the **SUPPORT TEXTURE** switch, but changing it did not affect the setting read by the scraper. The UI stored `ScrapeCartridge` in `SystemConf`, while ScreenScraper read it from `Settings`. As a result, support texture downloads remained disabled even when the switch appeared enabled.
 
-EmulationStation uses some C++11 code, which means you'll need to use at least g++-4.7 on Linux, or Visual Studio 2015 on Windows, to compile.
+## Source fix
 
-EmulationStation has a few dependencies. For building, you'll need CMake, SDL2, FreeImage, FreeType, cURL, RapidJSON, LibVLC, SDLMixer.  You also should probably install the `fonts-droid` package which contains fallback fonts for Chinese/Japanese/Korean characters, but ES will still work fine without it (this package is only used at run-time). Your distro may also offer a "system developer" group of packages that includes essential compilation tools, it is recommended to install that first.
+Edit:
 
-**On Debian/Ubuntu:**
-All of this can be easily installed with `apt-get`:
-```bash
-sudo apt-get install libsdl2-dev libsdl2-mixer-dev libfreeimage-dev libfreetype6-dev \
-  libcurl4-openssl-dev rapidjson-dev libasound2-dev libgl1-mesa-dev build-essential \
-  libboost-all-dev cmake fonts-droid-fallback libvlc-dev libvlccore-dev vlc-bin libint-dev gettext
-```
-**On Fedora:**
-All of this can be easily installed with `dnf` (with rpmfusion activated) :
-```bash
-sudo dnf install SDL2-devel freeimage-devel freetype-devel curl-devel \
-  alsa-lib-devel mesa-libGL-devel cmake \
-  vlc-devel rapidjson-devel 
-```
-**On Arch/Manjaro:**
-All of this can be easily installed with `pacman`:
-```bash
-sudo pacman -S base-devel cmake freeimage sdl2_mixer sdl2 rapidjson boost
-```
-**On Solus:**
-All of this can be easily installed with `eopkg`:
-```bash
-sudo eopkg it -c system.devel sdl2-devel freeimage-devel freetype2-devel curl-devel \
-  rapidjson-devel alsa-lib-devel mesalib-devel vlc-devel sdl2-mixer-devel \
-  libcec-devel
+```text
+es-app/src/guis/GuiScraperStart.cpp
 ```
 
-Note this Repository uses a git submodule - to checkout the source and all submodules, use
+Change:
 
-```bash
-git clone --recursive https://github.com/batocera-linux/batocera-emulationstation.git
+```cpp
+addSwitch(_("SUPPORT TEXTURE"), "ScrapeCartridge", false);
 ```
 
-or 
+to:
 
-```bash
-git clone https://github.com/batocera-linux/batocera-emulationstation.git
-cd batocera-emulationstation
-git submodule update --init
+```cpp
+addSwitch(_("SUPPORT TEXTURE"), "ScrapeCartridge", true);
 ```
 
-To setup compilation, generate and build the Makefile with CMake:
-```bash
-cmake .
+The final argument selects the configuration store:
+
+- `false`: `SystemConf` (incorrect for this option)
+- `true`: `Settings` (the store read by `ScreenScraper.cpp`)
+
+The fix used here is commit [`1e42f2932`](https://github.com/amosjerbi/emulationstation-next/commit/1e42f293214e0c30669cad29310def391694a24d).
+
+## Build the ROCKNIX aarch64 binary
+
+The repository includes this GitHub Actions workflow:
+
+```text
+.github/workflows/build-rocknix-rgds.yml
 ```
 
-And then begin compilation:
-```bash
-make
+Push the source fix and dispatch the workflow:
+
+```sh
+git add es-app/src/guis/GuiScraperStart.cpp
+git commit -m "Fix support texture scraper setting"
+git push origin master
+
+gh workflow run build-rocknix-rgds.yml \
+  --repo OWNER/emulationstation-next \
+  --ref master
 ```
 
-**On the Raspberry Pi:**
+ROCKNIX cross-compilation can take a long time, potentially hours. When it completes, download the `emulationstation-rocknix-rgds-aarch64` artifact and extract it. It should contain:
 
-Every model from the Pi 1 onwards is supported, but the graphics API to build against depends
-on the GPU:
-
-| Model | GPU | Max OpenGL ES | Configure with |
-| --- | --- | --- | --- |
-| Pi 1, Pi 2, Pi 3, Zero, Zero 2 W | VideoCore IV | 2.0 | `cmake -DGLES2=ON .` |
-| Pi 4, Pi 400, CM4 | VideoCore VI | 3.1 | `cmake -DGLES3=ON .` |
-| Pi 5, CM5 | VideoCore VII | 3.1 | `cmake -DGLES3=ON .` |
-
-`-DGLES3=ON` selects the OpenGL ES 3.x renderer, which is the faster of the two backends. It
-requires a driver that can create an ES 3.x context, so it is only suitable for the Pi 4 and
-later.
-
-Running plain `cmake .` is also fine: with no graphics option set the build detects GLES and
-defaults to the OpenGL ES 2.0 renderer, which works on every model. Pass `-DGLES3=ON`
-explicitly on a Pi 4 or later to get the faster path.
-
-**On Windows:**
-
-[FreeImage](http://downloads.sourceforge.net/freeimage/FreeImage3154Win32.zip)
-
-[FreeType2](http://download.savannah.gnu.org/releases/freetype/freetype-2.4.9.tar.bz2) (you'll need to compile)
-
-[SDL2](http://www.libsdl.org/release/SDL2-devel-2.0.8-VC.zip)
-
-[cURL](http://curl.haxx.se/download.html) (you'll need to compile or get the pre-compiled DLL version)
-
-[RapisJSON](https://github.com/tencent/rapidjson) (you'll need the `include/rapidsjon` added to the include path)
-
-[SDL Mixer](https://www.libsdl.org/projects/SDL_mixer/) 
-
-[LibVlc](http://download.videolan.org/pub/videolan/vlc/) (x86 sdk files are present in .7z files)
-
-[CMake](http://www.cmake.org/cmake/resources/software.html) (this is used for generating the Visual Studio project)
-
-```
-set ES_LIB_DIR=c:\src\lib
-
-mkdir c:\src\batocera-emulationstation\build
-cd c:\src\batocera-emulationstation\build /D
-
-cmake -g "Visual Studio 14 2015 x86" .. -DEIGEN3_INCLUDE_DIR=%ES_LIB_DIR%\eigen -DRAPIDJSON_INCLUDE_DIRS=%ES_LIB_DIR%\rapidjson\include -DFREETYPE_INCLUDE_DIRS=%ES_LIB_DIR%\freetype-2.7\include -DFREETYPE_LIBRARY=%ES_LIB_DIR%\freetype-2.7\objs\vc2010\Win32\freetype27.lib -DFreeImage_INCLUDE_DIR=%ES_LIB_DIR%\FreeImage\Source -DFreeImage_LIBRARY=%ES_LIB_DIR%\FreeImage\Dist\x32\FreeImage.lib -DSDL2_INCLUDE_DIR=%ES_LIB_DIR%\SDL2-2.0.9\include -DSDL2_LIBRARY=%ES_LIB_DIR%\SDL2-2.0.9\build\Release\SDL2.lib;%ES_LIB_DIR%\SDL2-2.0.9\build\Release\SDL2main.lib;Imm32.lib;version.lib -DBOOST_ROOT=%ES_LIB_DIR%\boost_1_61_0 -DBoost_LIBRARY_DIR=%ES_LIB_DIR%\boost_1_61_0\lib32-msvc-14.0 -DCURL_INCLUDE_DIR=%ES_LIB_DIR%\curl-7.50.3\include -DCURL_LIBRARY=%ES_LIB_DIR%\curl-7.50.3\builds\libcurl-vc14-x86-release-dll-ipv6-sspi-winssl\lib\libcurl.lib -DVLC_INCLUDE_DIR=%ES_LIB_DIR%\libvlc-2.2.2\include -DVLC_LIBRARIES=%ES_LIB_DIR%\libvlc-2.2.2\lib\msvc\libvlc.lib;%ES_LIB_DIR%\libvlc-2.2.2\lib\msvc\libvlccore.lib -DVLC_VERSION=1.0.0 -DSDLMIXER_INCLUDE_DIR=%ES_LIB_DIR%\SDL2_mixer-2.0.4\include -DSDLMIXER_LIBRARY=%ES_LIB_DIR%\SDL2_mixer-2.0.4\lib\x86\SDL2_mixer.lib
+```text
+emulationstation
+emulationstation.sha256
 ```
 
-Launching outside of Batocera
-=============================
+Verify the artifact before installing it:
 
-To launch Batocera EmulationStation, it is recommended to build it with [batocera.linux](https://github.com/batocera-linux/batocera.linux) instead. However, you can run a barebones version of ES (perhaps you want to tweak some menus without waiting for the entirety of Batocera to compile) if you provide the appropriate folder structure and files for it. **If you launch Batocera EmulationStation this way outside of Batocera, expect a lot of things to not actually be functional (eg. emulator launching, the background music player, the webserver, etc.), such things can only work with an environment set up identically to Batocera.** Before attempting this, it is recommended to have built batocera.linux at least once to have the appropriate configuration files for Batocera Emulationstation. They can also conveniently be taken from an existing Batocera install, from the same paths relative to root being `target`. For example: `/usr/share/emulationstation/`
-
-Create the appropriate directories for ES's configuration files and resources, then copy them in from Batocera (instructions assuming you've already built batocera.linux):
-
-```bash
-sudo mkdir /etc/emulationstation
-sudo chmod a+w /etc/emulationstation
-cp -r ~/batocera.linux/output/x86_64/target/usr/share/emulationstation/ /etc/
+```sh
+cd /path/to/emulationstation-rocknix-rgds-aarch64
+shasum -a 256 emulationstation
+cat emulationstation.sha256
+file emulationstation
 ```
 
-(This would be where `/usr/share/emulationstation/` is used instead if copying from an existing Batocera install).
+The hashes must match, and `file` must report an ARM aarch64 ELF executable.
 
-Then create the `/userdata` directory in your root, give it the correct permissions, and copy in the data from Batocera's `datainit` folder:
+## Connect to the ROCKNIX device
 
-```bash
-sudo mkdir /userdata
-sudo chmod a+w /userdata
-cp -r ~/batocera.linux/output/x86_64/target/usr/share/batocera/datainit/* /userdata
+Replace `DEVICE_IP` below with the device address:
+
+```sh
+export DEVICE_IP=192.168.0.105
+ssh root@"$DEVICE_IP"
 ```
 
-Then run `./emulationstation.sh` to start up EmulationStation. This will give you enough to navigate menus and change settings, however since we aren't truly inside of Batocera you'll find that none of the emulators launch and none of the secondary functions (such as the background music player) work.
+If the device was reflashed and SSH reports that its host key changed, first verify that the fingerprint belongs to the device, then remove the obsolete entry and reconnect:
 
-If you want to see the full Batocera EmulationStation experience, it is recommended to build [batocera.linux](https://github.com/batocera-linux/batocera.linux) instead.
-
-Configuring
-===========
-
-**~/.emulationstation/es_systems.cfg:**
-When first run, an example systems configuration file will be created at `~/.emulationstation/es_systems.cfg`.  `~` is `$HOME` on Linux, and `%HOMEPATH%` on Windows.  This example has some comments explaining how to write the configuration file. See the "Writing an es_systems.cfg" section for more information.
-
-**Keep in mind you'll have to set up your emulator separately from EmulationStation if not launching from within Batocera!**
-
-**~/.emulationstation/es_input.cfg:**
-When you first start EmulationStation, you will be prompted to configure an input device. The process is thus:
-
-1. Hold a button on the device you want to configure.  This includes the keyboard.
-
-2. Press the buttons as they appear in the list.  Some inputs can be skipped by holding any button down for a few seconds.
-
-3. You can review your mappings by pressing up and down, making any changes by pressing South (B on SNES).
-
-4. Choose "SAVE" to save this device and close the input configuration screen.
-
-The new configuration will be added to the `/etc/emulationstation/es_input.cfg` file.
-
-**Both new and old devices can be (re)configured at any time by pressing the Start button and choosing "MAP CONTROLLER".** From here, you may unplug the device you used to open the menu and plug in a new one, if necessary. New devices will be appended to the existing input configuration file, so your old devices will remain configured.
-
-**If your controller stops working, you can delete the `~/.emulationstation/es_input.cfg` file to make the input configuration screen re-appear on next run.**
-
-You can use `--help` or `-h` to view a list of command-line options. Briefly outlined here:
-```
---resolution [width] [height]   try and force a particular resolution
---gamelist-only                 skip automatic game search, only read from gamelist.xml
---ignore-gamelist               ignore the gamelist (useful for troubleshooting)
---draw-framerate                display the framerate
---no-exit                       don't show the exit option in the menu
---no-splash                     don't show the splash screen
---debug                         more logging, show console on Windows
---scrape                        scrape using command line interface
---windowed                      not fullscreen, should be used with --resolution
---fullscreen-borderless			fullscreen, non exclusive.
---vsync [1/on or 0/off]         turn vsync on or off (default is on)
---max-vram [size]               Max VRAM to use in Mb before swapping. 0 for unlimited
---force-kid             		Force the UI mode to be Kid
---force-kiosk           		Force the UI mode to be Kiosk
---force-disable-filters         Force the UI to ignore applied filters in gamelist
---home							Force the .emulationstation folder (windows)
---help, -h                      summon a sentient, angry tuba
+```sh
+ssh-keygen -R "$DEVICE_IP"
+ssh -o StrictHostKeyChecking=accept-new root@"$DEVICE_IP"
 ```
 
-As long as ES hasn't frozen, you can always press F4 to close the application.
+ROCKNIX may use password authentication. `sshpass` can be used for unattended commands, but normal `ssh`/`scp` prompts are safer because they do not place the password in shell history.
 
-Writing an es_systems.cfg
-=========================
+## Why a bind mount is required
 
-Complete configuration instructions at [emulationstation.org](http://emulationstation.org/gettingstarted.html#config).
+On ROCKNIX, `/usr/bin/emulationstation` is stored in the read-only squashfs root filesystem. It cannot be replaced directly. Store the custom executable under `/storage`, then bind-mount it over the stock path.
 
-The `es_systems.cfg` file contains the system configuration data for EmulationStation, written in XML.  This tells EmulationStation what systems you have, what platform they correspond to (for scraping), and where the games are located.
+Copy the binary to a staging path:
 
-ES will check the following location for its `es_systems.cfg` file:
-* `/etc/emulationstation/es_systems.cfg`
+```sh
+scp emulationstation root@"$DEVICE_IP":/storage/.config/emulationstation/emulationstation.next
+```
 
-The order EmulationStation displays systems reflects the order you define them in.
+Set permissions and verify the copied file:
 
-**NOTE:** A system *must* have at least one game present in its "path" directory, or ES will ignore it! If no valid systems are found, ES will report an error and quit!
+```sh
+ssh root@"$DEVICE_IP" '
+  chmod 755 /storage/.config/emulationstation/emulationstation.next
+  sha256sum /storage/.config/emulationstation/emulationstation.next
+'
+```
 
-See [SYSTEMS.md](SYSTEMS.md) for some live examples in EmulationStation.
+Compare that checksum with `emulationstation.sha256` before continuing.
 
-The following "tags" are replaced by ES in launch commands:
+## Test for the current boot only
 
-`%ROM%`		- Replaced with absolute path to the selected ROM, with most Bash special characters escaped with a backslash.
+The following bind mount is temporary and disappears after reboot:
 
-`%BASENAME%`	- Replaced with the "base" name of the path to the selected ROM. For example, a path of "/foo/bar.rom", this tag would be "bar". This tag is useful for setting up AdvanceMAME.
+```sh
+ssh root@"$DEVICE_IP" '
+  systemctl stop essway.service
+  mount --bind \
+    /storage/.config/emulationstation/emulationstation.next \
+    /usr/bin/emulationstation
+  systemctl start essway.service
+'
+```
 
-`%ROM_RAW%`	- Replaced with the unescaped, absolute path to the selected ROM.  If your emulator is picky about paths, you might want to use this instead of %ROM%, but enclosed in quotes.
+Verify it:
 
-`%HOME%`	- Replaced with the home folder.
+```sh
+ssh root@"$DEVICE_IP" '
+  systemctl is-active essway.service
+  sha256sum /usr/bin/emulationstation
+  pidof emulationstation
+'
+```
 
-`%SYSTEM%`	- Replaced with the current selected system name.
+## Make the patch survive reboot
 
-`%EMULATOR%`	- Replaced with the current selected emulator.
+ROCKNIX loads custom systemd units from `/storage/.config/system.d`. Create this local file as `emulationstation-custom.service`:
 
-`%CORE%`	- Replaced with the current selected core.
+```ini
+[Unit]
+Description=Install persistent custom EmulationStation binary
+RequiresMountsFor=/storage/.config/emulationstation/emulationstation.new
+Before=essway.service emustation.service
 
-gamelist.xml
-============
+[Service]
+Type=oneshot
+ExecStart=/bin/mount --bind /storage/.config/emulationstation/emulationstation.new /usr/bin/emulationstation
+ExecStop=/bin/umount /usr/bin/emulationstation
+RemainAfterExit=yes
 
-The `gamelist.xml` file for a system defines metadata for games, such as a name, image (like a screenshot or box art), description, release date, and rating.
+[Install]
+WantedBy=rocknix.target
+```
 
-If at least one game in a system has an image specified, ES will use the detailed view for that system (which displays metadata alongside the game list).
+Install and enable it:
 
-*You can use ES's [scraping](http://en.wikipedia.org/wiki/Web_scraping) tools to avoid creating a `gamelist.xml` by hand.*  There are two ways to run the scraper:
+```sh
+scp emulationstation-custom.service \
+  root@"$DEVICE_IP":/storage/.config/system.d/emulationstation-custom.service
 
-* **If you want to scrape multiple games:** press start to open the menu and choose the "SCRAPER" option.  Adjust your settings and press "SCRAPE NOW".
-* **If you just want to scrape one game:** find the game on the game list in ES and press select.  Choose "EDIT THIS GAME'S METADATA" and then press the "SCRAPE" button at the bottom of the metadata editor.
+ssh root@"$DEVICE_IP" '
+  set -e
+  mv /storage/.config/emulationstation/emulationstation.next \
+     /storage/.config/emulationstation/emulationstation.new
+  chmod 755 /storage/.config/emulationstation/emulationstation.new
+  systemctl daemon-reload
+  systemctl enable emulationstation-custom.service
+  sync
+  systemctl reboot
+'
+```
 
-You can also edit metadata within ES by using the metadata editor - just find the game you wish to edit on the gamelist, press Select, and choose "EDIT THIS GAME'S METADATA."
+Rebooting avoids stacking a persistent bind mount on top of a temporary test mount.
 
-A command-line version of the scraper is also provided - just run emulationstation with `--scrape` *(currently broken)*.
+After the device returns, verify persistence:
 
-The switch `--ignore-gamelist` can be used to ignore the gamelist and force ES to use the non-detailed view.
+```sh
+ssh root@"$DEVICE_IP" '
+  systemctl is-enabled emulationstation-custom.service
+  systemctl is-active emulationstation-custom.service essway.service
+  sha256sum /usr/bin/emulationstation
+  pidof emulationstation
+'
+```
 
-If you're writing a tool to generate or parse gamelist.xml files, you should check out [GAMELISTS.md](GAMELISTS.md) for more detailed documentation.
+## Update an existing persistent installation
 
+When the persistent service is already installed, stage the new binary as `emulationstation.next`, verify its checksum, and replace the active stored binary safely:
 
-Themes
-======
+```sh
+scp emulationstation root@"$DEVICE_IP":/storage/.config/emulationstation/emulationstation.next
 
-By default, EmulationStation will use ES-Carbon. Additional themes can be installed into `/etc/emulationstation/themes`.
+ssh root@"$DEVICE_IP" '
+  set -e
+  chmod 755 /storage/.config/emulationstation/emulationstation.next
+  sha256sum /storage/.config/emulationstation/emulationstation.next
 
-If you want to know more about making your own themes (or editing existing ones), read [THEMES.md](THEMES.md) or check out the [wiki page](https://wiki.batocera.org/write_themes_for_emulationstation).
+  systemctl stop essway.service
+  systemctl stop emulationstation-custom.service
 
+  mv /storage/.config/emulationstation/emulationstation.new \
+     /storage/.config/emulationstation/emulationstation.previous
+  mv /storage/.config/emulationstation/emulationstation.next \
+     /storage/.config/emulationstation/emulationstation.new
+
+  systemctl start emulationstation-custom.service
+  systemctl start essway.service
+'
+```
+
+Verify the live checksum afterward:
+
+```sh
+ssh root@"$DEVICE_IP" '
+  systemctl is-active emulationstation-custom.service essway.service
+  sha256sum /usr/bin/emulationstation
+  pidof emulationstation
+'
+```
+
+## Required scraper options
+
+Open the scraper configuration in EmulationStation and use:
+
+```text
+SCRAPER                     SCREENSCRAPER
+GAMES TO SCRAPE FOR         ALL
+IGNORE RECENTLY SCRAPED     ALL
+SUPPORT TEXTURE             ENABLED
+```
+
+Then start the scrape for the desired system.
+
+For Game Gear, successful support textures are stored alongside the other scraped images:
+
+```text
+/storage/roms/gamegear/images/<ROM filename>-cartridge.png
+```
+
+The same directory may be visible over an attached or network-mounted ROM volume as:
+
+```text
+/Volumes/games-roms/gamegear/images/<ROM filename>-cartridge.png
+```
+
+Examples of other scraper output suffixes are `-image.png`, `-thumb.png`, and `-marquee.png`. The support texture uses `-cartridge.png`.
+
+Not every ScreenScraper game entry necessarily has `support-texture` media. If only particular games are missing the file, confirm that those games have support-texture artwork on ScreenScraper and check EmulationStation's scraper log.
+
+## Roll back
+
+If an update fails and `emulationstation.previous` exists:
+
+```sh
+ssh root@"$DEVICE_IP" '
+  set -e
+  systemctl stop essway.service
+  systemctl stop emulationstation-custom.service
+  mv /storage/.config/emulationstation/emulationstation.new \
+     /storage/.config/emulationstation/emulationstation.failed
+  mv /storage/.config/emulationstation/emulationstation.previous \
+     /storage/.config/emulationstation/emulationstation.new
+  systemctl start emulationstation-custom.service
+  systemctl start essway.service
+'
+```
+
+To return entirely to the stock binary:
+
+```sh
+ssh root@"$DEVICE_IP" '
+  systemctl stop essway.service
+  systemctl disable --now emulationstation-custom.service
+  systemctl start essway.service
+'
+```
+
+The stock executable remains untouched inside the read-only ROCKNIX image.
