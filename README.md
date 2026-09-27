@@ -8,7 +8,8 @@
 
 Cartrix is an open-source game launcher for rocknix inspired by the Android launcher Socket.
 
-Customize it with your own platforms and 3D OBJ cartridge models. An included ScreenScraper.fr script can automatically fetch cartridge labels using your developer account (fetch-textures.sh).
+Customize it with your own platforms and 3D OBJ cartridge models. An included ScreenScraper.fr script can automatically fetch cartridge labels (must have a developer account for that).
+
 
 ## Supported Platforms in launcher
 
