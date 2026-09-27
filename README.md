@@ -6,7 +6,9 @@
 
 # Cartrix
 
-Cartrix is a LÖVE 3D game carousel for ROCKNIX. On the Anbernic RG DS it spans both 640×480 displays with one borderless 1280×480 window. Select a game to see its cartridge or disc, artwork, screenshot, and play metadata, then press A to launch it.
+Cartrix is an open-source game launcher for rocknix inspired by the Android launcher Socket.
+
+Customize it with your own platforms and 3D OBJ cartridge models. An included ScreenScraper.fr script can automatically fetch cartridge labels using your developer account (fetch-textures.sh).
 
 ## Supported Platforms in launcher
 
